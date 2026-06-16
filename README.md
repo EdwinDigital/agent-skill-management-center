@@ -81,10 +81,14 @@ npm run check
 node --check public/app.js
 ```
 
-Start the local server:
+Use the standard project scripts to start and stop the local server:
 
 ```bash
 npm start
+```
+
+```bash
+npm stop
 ```
 
 Open:
@@ -107,6 +111,12 @@ Example:
 PORT=5173 SKILL_ROOT=/Users/me/.agents/skills npm start
 ```
 
+Stop a custom-port instance with the same `PORT` value:
+
+```bash
+PORT=5173 npm stop
+```
+
 ## Operating workflow
 
 1. Start the app and open `http://localhost:4173`.
@@ -120,11 +130,14 @@ PORT=5173 SKILL_ROOT=/Users/me/.agents/skills npm start
 
 This app is designed as a local developer tool. A typical deployment is a local Node process bound to `localhost`.
 
-For a long-running local process:
+Use the standard scripts for local runtime management:
 
 ```bash
-nohup npm start > /tmp/skill-logic-visualizer.log 2>&1 &
+npm start
+npm stop
 ```
+
+`npm stop` sends `SIGTERM` to the process listening on `PORT` (default `4173`), so it can be used for foreground or background instances started by this project.
 
 For production-like hosting, keep the same Node server and static assets together because the frontend depends on server APIs for filesystem access, SQLite storage, GitHub auth status, and Copilot SDK evaluation. Protect the service if exposed beyond localhost: it can read local Skill directories configured in the database.
 

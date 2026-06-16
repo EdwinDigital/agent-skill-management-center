@@ -81,10 +81,14 @@ npm run check
 node --check public/app.js
 ```
 
-启动本地服务：
+使用项目标准脚本启动和停止本地服务：
 
 ```bash
 npm start
+```
+
+```bash
+npm stop
 ```
 
 打开：
@@ -107,6 +111,12 @@ http://localhost:4173
 PORT=5173 SKILL_ROOT=/Users/me/.agents/skills npm start
 ```
 
+使用相同的 `PORT` 停止自定义端口实例：
+
+```bash
+PORT=5173 npm stop
+```
+
 ## 使用流程
 
 1. 启动应用并打开 `http://localhost:4173`。
@@ -120,11 +130,14 @@ PORT=5173 SKILL_ROOT=/Users/me/.agents/skills npm start
 
 该应用设计为本地开发者工具，典型部署方式是在本机启动绑定到 `localhost` 的 Node 进程。
 
-长期运行本地进程：
+使用标准脚本管理本地运行：
 
 ```bash
-nohup npm start > /tmp/skill-logic-visualizer.log 2>&1 &
+npm start
+npm stop
 ```
+
+`npm stop` 会向监听 `PORT`（默认 `4173`）的进程发送 `SIGTERM`，因此可用于停止此前台或后台启动的项目实例。
 
 如果按生产方式托管，需要保持 Node 服务端和静态资源一起部署，因为前端依赖服务端 API 完成文件系统访问、SQLite 存储、GitHub 登录状态读取和 Copilot SDK 评估。如果将服务暴露到 localhost 之外，请做好访问保护：该服务可以读取数据库中配置的本地 Skill 目录。
 
