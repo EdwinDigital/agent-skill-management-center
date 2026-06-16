@@ -1,14 +1,19 @@
 import express from "express";
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
+import fsSync from "node:fs";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { promisify } from "node:util";
 
 const app = express();
 const execFileAsync = promisify(execFile);
 const port = Number(process.env.PORT || 4173);
 const defaultSkillRoot = process.env.SKILL_ROOT || path.join(os.homedir(), ".agents", "skills");
+const databasePath = process.env.SKILL_ANALYSIS_DB || path.join(os.homedir(), ".skill-logic-visualizer", "analysis.sqlite");
+const analysisSchemaVersion = "logic-map-scoring-activation-prompts-v1";
 const fallbackModels = [
   { id: "gpt-5", name: "GPT-5", source: "fallback" },
   { id: "claude-sonnet-4.5", name: "Claude Sonnet 4.5", source: "fallback" },
@@ -25,8 +30,80 @@ const descriptionCandidates = [
   "manifest.json",
   "skill.json"
 ];
+const supportedAgentSkillDirectories = [
+  ["AiderDesk", "aider-desk", ".aider-desk/skills/", "~/.aider-desk/skills/"],
+  ["Amp, Replit, Universal", "amp", ".agents/skills/", "~/.config/agents/skills/"],
+  ["Antigravity", "antigravity", ".agents/skills/", "~/.gemini/antigravity/skills/"],
+  ["Antigravity CLI", "antigravity-cli", ".agents/skills/", "~/.gemini/antigravity-cli/skills/"],
+  ["AstrBot", "astrbot", "data/skills/", "~/.astrbot/data/skills/"],
+  ["Autohand Code CLI", "autohand-code", ".autohand/skills/", "~/.autohand/skills/"],
+  ["Augment", "augment", ".augment/skills/", "~/.augment/skills/"],
+  ["IBM Bob", "bob", ".bob/skills/", "~/.bob/skills/"],
+  ["Claude Code", "claude-code", ".claude/skills/", "~/.claude/skills/"],
+  ["OpenClaw", "openclaw", "skills/", "~/.openclaw/skills/"],
+  ["Cline, Dexto, Kimi Code CLI, Loaf, Warp, Zed", "cline", ".agents/skills/", "~/.agents/skills/"],
+  ["CodeArts Agent", "codearts-agent", ".codeartsdoer/skills/", "~/.codeartsdoer/skills/"],
+  ["CodeBuddy", "codebuddy", ".codebuddy/skills/", "~/.codebuddy/skills/"],
+  ["Codemaker", "codemaker", ".codemaker/skills/", "~/.codemaker/skills/"],
+  ["Code Studio", "codestudio", ".codestudio/skills/", "~/.codestudio/skills/"],
+  ["Codex", "codex", ".agents/skills/", "~/.codex/skills/"],
+  ["Command Code", "command-code", ".commandcode/skills/", "~/.commandcode/skills/"],
+  ["Continue", "continue", ".continue/skills/", "~/.continue/skills/"],
+  ["Cortex Code", "cortex", ".cortex/skills/", "~/.snowflake/cortex/skills/"],
+  ["Crush", "crush", ".crush/skills/", "~/.config/crush/skills/"],
+  ["Cursor", "cursor", ".agents/skills/", "~/.cursor/skills/"],
+  ["Deep Agents", "deepagents", ".agents/skills/", "~/.deepagents/agent/skills/"],
+  ["Devin for Terminal", "devin", ".devin/skills/", "~/.config/devin/skills/"],
+  ["Droid", "droid", ".factory/skills/", "~/.factory/skills/"],
+  ["Firebender", "firebender", ".agents/skills/", "~/.firebender/skills/"],
+  ["ForgeCode", "forgecode", ".forge/skills/", "~/.forge/skills/"],
+  ["Gemini CLI", "gemini-cli", ".agents/skills/", "~/.gemini/skills/"],
+  ["GitHub Copilot", "github-copilot", ".agents/skills/", "~/.copilot/skills/"],
+  ["Goose", "goose", ".goose/skills/", "~/.config/goose/skills/"],
+  ["Hermes Agent", "hermes-agent", ".hermes/skills/", "~/.hermes/skills/"],
+  ["inference.sh", "inference-sh", ".inferencesh/skills/", "~/.inferencesh/skills/"],
+  ["Jazz", "jazz", ".jazz/skills/", "~/.jazz/skills/"],
+  ["Junie", "junie", ".junie/skills/", "~/.junie/skills/"],
+  ["iFlow CLI", "iflow-cli", ".iflow/skills/", "~/.iflow/skills/"],
+  ["Kilo Code", "kilo", ".kilocode/skills/", "~/.kilocode/skills/"],
+  ["Kiro CLI", "kiro-cli", ".kiro/skills/", "~/.kiro/skills/"],
+  ["Kode", "kode", ".kode/skills/", "~/.kode/skills/"],
+  ["Lingma", "lingma", ".lingma/skills/", "~/.lingma/skills/"],
+  ["MCPJam", "mcpjam", ".mcpjam/skills/", "~/.mcpjam/skills/"],
+  ["Mistral Vibe", "mistral-vibe", ".vibe/skills/", "~/.vibe/skills/"],
+  ["Moxby", "moxby", ".moxby/skills/", "~/.moxby/skills/"],
+  ["Mux", "mux", ".mux/skills/", "~/.mux/skills/"],
+  ["OpenCode", "opencode", ".agents/skills/", "~/.config/opencode/skills/"],
+  ["OpenHands", "openhands", ".openhands/skills/", "~/.openhands/skills/"],
+  ["Ona", "ona", ".ona/skills/", "~/.ona/skills/"],
+  ["Pi", "pi", ".pi/skills/", "~/.pi/agent/skills/"],
+  ["Qoder", "qoder", ".qoder/skills/", "~/.qoder/skills/"],
+  ["Qoder CN", "qoder-cn", ".qoder/skills/", "~/.qoder-cn/skills/"],
+  ["Qwen Code", "qwen-code", ".qwen/skills/", "~/.qwen/skills/"],
+  ["Reasonix", "reasonix", ".reasonix/skills/", "~/.reasonix/skills/"],
+  ["Rovo Dev", "rovodev", ".rovodev/skills/", "~/.rovodev/skills/"],
+  ["Roo Code", "roo", ".roo/skills/", "~/.roo/skills/"],
+  ["Tabnine CLI", "tabnine-cli", ".tabnine/agent/skills/", "~/.tabnine/agent/skills/"],
+  ["Terramind", "terramind", ".terramind/skills/", "~/.terramind/skills/"],
+  ["Tinycloud", "tinycloud", ".tinycloud/skills/", "~/.tinycloud/skills/"],
+  ["Trae", "trae", ".trae/skills/", "~/.trae/skills/"],
+  ["Trae CN", "trae-cn", ".trae/skills/", "~/.trae-cn/skills/"],
+  ["Windsurf", "windsurf", ".windsurf/skills/", "~/.codeium/windsurf/skills/"],
+  ["Zencoder, Zenflow", "zencoder", ".zencoder/skills/", "~/.zencoder/skills/"],
+  ["Neovate", "neovate", ".neovate/skills/", "~/.neovate/skills/"],
+  ["Pochi", "pochi", ".pochi/skills/", "~/.pochi/skills/"],
+  ["AdaL", "adal", ".adal/skills/", "~/.adal/skills/"]
+];
+const database = initializeDatabase();
 
-app.use(express.json({ limit: "1mb" }));
+app.use(express.json({ limit: "2mb" }));
+app.use((error, _request, response, next) => {
+  if (error?.type === "entity.too.large") {
+    response.status(413).json({ error: "Skill analysis payload is too large. Try refreshing with a smaller file sample." });
+    return;
+  }
+  next(error);
+});
 app.use(express.static(path.join(process.cwd(), "public")));
 
 app.get("/favicon.ico", (_request, response) => {
@@ -42,6 +119,43 @@ app.get("/api/config", (_request, response) => {
     ],
     defaultModel: "github-default"
   });
+});
+
+app.get("/api/skill-roots", (_request, response) => {
+  response.json({ roots: listScannedSkillRoots() });
+});
+
+app.post("/api/skill-roots/scan", (_request, response) => {
+  const result = scanDefaultSkillRoots();
+  response.json({
+    ...result,
+    roots: listScannedSkillRoots()
+  });
+});
+
+app.post("/api/skill-roots/pick-local", async (request, response) => {
+  try {
+    const root = await pickLocalSkillRoot();
+    const inspection = await inspectSkillRoot(root, normalizeLanguage(request.body?.language));
+    response.json({ directory: inspection });
+  } catch (error) {
+    response.status(400).json({ error: error.message });
+  }
+});
+
+app.post("/api/skill-roots/custom", (request, response) => {
+  const { label, value, type } = request.body || {};
+  try {
+    const root = addCustomSkillRoot({ label, value, type });
+    response.json({ root, roots: listScannedSkillRoots() });
+  } catch (error) {
+    response.status(400).json({ error: error.message });
+  }
+});
+
+app.delete("/api/skill-roots/:id", (request, response) => {
+  const removed = deleteScannedSkillRoot(request.params.id);
+  response.json({ removed, roots: listScannedSkillRoots() });
 });
 
 app.get("/api/skills", async (request, response) => {
@@ -151,6 +265,43 @@ app.post("/api/analyze-skill", async (request, response) => {
   }
 });
 
+app.post("/api/logic-map/cache", (request, response) => {
+  const { skill, model, language } = request.body || {};
+  try {
+    const normalizedSkill = normalizeSkillPayload(skill);
+    const selectedModel = normalizeModelId(model);
+    const selectedLanguage = normalizeLanguage(language);
+    const cached = getCachedModelAnalysis(normalizedSkill, selectedModel, selectedLanguage);
+    response.json({
+      cached: Boolean(cached),
+      analysis: cached
+    });
+  } catch (error) {
+    response.status(400).json({ error: error.message });
+  }
+});
+
+app.post("/api/logic-map/generate", async (request, response) => {
+  const { skill, model, language } = request.body || {};
+  try {
+    const normalizedSkill = normalizeSkillPayload(skill);
+    const selectedModel = normalizeModelId(model);
+    const selectedLanguage = normalizeLanguage(language);
+    const analysis = await generateModelLogicMap(normalizedSkill, selectedModel, selectedLanguage);
+    saveModelAnalysis(normalizedSkill, selectedModel, selectedLanguage, analysis);
+    response.json({
+      cached: false,
+      analysis
+    });
+  } catch (error) {
+    response.status(503).json({
+      source: "rules",
+      error: error.message,
+      content: localize("Model insight is unavailable. Sign in with GitHub and refresh Copilot scopes to enable SDK-driven analysis.", normalizeLanguage(language))
+    });
+  }
+});
+
 function resolveRequestedRoot(root) {
   if (!root || typeof root !== "string") {
     return defaultSkillRoot;
@@ -162,6 +313,335 @@ function resolveRequestedRoot(root) {
 
 function normalizeLanguage(language) {
   return language === "zh" ? "zh" : "en";
+}
+
+function normalizeModelId(model) {
+  return model && model !== "github-default" ? String(model) : "github-default";
+}
+
+function initializeDatabase() {
+  fsSync.mkdirSync(path.dirname(databasePath), { recursive: true });
+  const db = new DatabaseSync(databasePath);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS skill_model_analyses (
+      cache_key TEXT PRIMARY KEY,
+      skill_name TEXT NOT NULL,
+      skill_path TEXT NOT NULL,
+      model TEXT NOT NULL,
+      language TEXT NOT NULL,
+      content_hash TEXT NOT NULL,
+      analysis_json TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_skill_model_analyses_lookup
+      ON skill_model_analyses (skill_name, skill_path, model, language, content_hash);
+    CREATE TABLE IF NOT EXISTS skill_directory_defaults (
+      agent_slug TEXT PRIMARY KEY,
+      agent_name TEXT NOT NULL,
+      project_path TEXT NOT NULL,
+      global_path TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS skill_directory_scan (
+      id TEXT PRIMARY KEY,
+      source_type TEXT NOT NULL,
+      agent_slug TEXT,
+      label TEXT NOT NULL,
+      path TEXT NOT NULL,
+      expanded_path TEXT NOT NULL,
+      exists_on_disk INTEGER NOT NULL DEFAULT 0,
+      removable INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_skill_directory_scan_expanded_path
+      ON skill_directory_scan (expanded_path);
+  `);
+  seedDefaultSkillDirectories(db);
+  seedCurrentDefaultSkillRoot(db);
+  return db;
+}
+
+function seedDefaultSkillDirectories(db) {
+  const now = new Date().toISOString();
+  const statement = db.prepare(`
+    INSERT INTO skill_directory_defaults (agent_slug, agent_name, project_path, global_path, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(agent_slug) DO UPDATE SET
+      agent_name = excluded.agent_name,
+      project_path = excluded.project_path,
+      global_path = excluded.global_path,
+      updated_at = excluded.updated_at
+  `);
+  for (const [agentName, agentSlug, projectPath, globalPath] of supportedAgentSkillDirectories) {
+    statement.run(agentSlug, agentName, projectPath, globalPath, now, now);
+  }
+}
+
+function seedCurrentDefaultSkillRoot(db) {
+  if (!directoryExists(defaultSkillRoot)) {
+    return;
+  }
+  upsertScannedSkillRoot(db, {
+    sourceType: "default",
+    agentSlug: "current-default",
+    label: "Default skills",
+    value: defaultSkillRoot,
+    removable: false
+  });
+}
+
+function listScannedSkillRoots() {
+  return database
+    .prepare(`
+      SELECT id, source_type, agent_slug, label, path, expanded_path, exists_on_disk, removable, updated_at
+      FROM skill_directory_scan
+      WHERE source_type != 'browser'
+      ORDER BY agent_slug = 'current-default' DESC, source_type = 'custom' DESC, label COLLATE NOCASE, expanded_path
+    `)
+    .all()
+    .map((row) => ({
+      id: row.id,
+      type: row.source_type === "browser" ? "browser" : "server",
+      sourceType: row.source_type,
+      agentSlug: row.agent_slug || "",
+      label: row.label,
+      value: row.path,
+      expandedPath: row.expanded_path,
+      existsOnDisk: Boolean(row.exists_on_disk),
+      removable: Boolean(row.removable),
+      updatedAt: row.updated_at
+    }));
+}
+
+function scanDefaultSkillRoots() {
+  const defaults = database
+    .prepare("SELECT agent_slug, agent_name, global_path FROM skill_directory_defaults WHERE global_path IS NOT NULL AND global_path != 'N/A (project-only)'")
+    .all();
+  let added = 0;
+  let found = 0;
+
+  for (const item of defaults) {
+    const expandedPath = expandHomePath(item.global_path);
+    if (!directoryExists(expandedPath)) {
+      continue;
+    }
+    found += 1;
+    if (path.resolve(expandedPath) === path.resolve(defaultSkillRoot)) {
+      continue;
+    }
+    const changed = upsertScannedSkillRoot(database, {
+      sourceType: "default",
+      agentSlug: item.agent_slug,
+      label: item.agent_name,
+      value: item.global_path,
+      removable: false
+    });
+    if (changed) {
+      added += 1;
+    }
+  }
+  seedCurrentDefaultSkillRoot(database);
+
+  return { scanned: defaults.length, found, added };
+}
+
+function addCustomSkillRoot({ label, value, type = "server" }) {
+  if (!value || typeof value !== "string") {
+    throw new Error("A skill directory path is required.");
+  }
+  const sourceType = type === "browser" ? "browser" : "custom";
+  const normalizedValue = sourceType === "browser" ? value : normalizeScanPath(value, sourceType);
+  const root = {
+    sourceType,
+    agentSlug: null,
+    label: label || (sourceType === "browser" ? "Local" : path.basename(normalizedValue) || "Custom"),
+    value: normalizedValue,
+    removable: true
+  };
+  upsertScannedSkillRoot(database, root);
+  return listScannedSkillRoots().find((item) => item.expandedPath === normalizeScanPath(normalizedValue, sourceType));
+}
+
+async function pickLocalSkillRoot() {
+  if (process.platform !== "darwin") {
+    throw new Error("Native folder picker is currently supported on macOS. Enter a server path or use Scan for known Skill roots.");
+  }
+
+  const script = 'POSIX path of (choose folder with prompt "Choose a Skill directory")';
+  try {
+    const { stdout } = await execFileAsync("osascript", ["-e", script], { timeout: 120_000 });
+    const selectedPath = stdout.trim();
+    if (!selectedPath) {
+      throw new Error("No directory was selected.");
+    }
+    return path.resolve(selectedPath);
+  } catch (error) {
+    if (error.signal === "SIGTERM" || /User canceled|cancelled|canceled/i.test(error.message)) {
+      throw new Error("Directory selection was cancelled.");
+    }
+    throw error;
+  }
+}
+
+async function inspectSkillRoot(root, language = "en") {
+  const normalizedRoot = normalizeScanPath(root, "custom");
+  const stat = await fs.stat(normalizedRoot);
+  if (!stat.isDirectory()) {
+    throw new Error("Selected path is not a directory.");
+  }
+
+  const entries = await fs.readdir(normalizedRoot, { withFileTypes: true });
+  const directories = entries.filter((entry) => entry.isDirectory() && !entry.name.startsWith("."));
+  let describedSkills = 0;
+  for (const entry of directories) {
+    if (await findDescriptionFile(path.join(normalizedRoot, entry.name))) {
+      describedSkills += 1;
+    }
+  }
+  return {
+    path: normalizedRoot,
+    suggestedLabel: path.basename(normalizedRoot) || "Custom skills",
+    skillCount: directories.length,
+    describedSkills,
+    message: language === "zh"
+      ? `检测到 ${directories.length} 个 Skill 目录，其中 ${describedSkills} 个包含描述文件。`
+      : `${directories.length} Skill directories detected; ${describedSkills} include a description file.`
+  };
+}
+
+function deleteScannedSkillRoot(id) {
+  const row = database.prepare("SELECT removable FROM skill_directory_scan WHERE id = ?").get(id);
+  if (!row?.removable) {
+    return false;
+  }
+  database.prepare("DELETE FROM skill_directory_scan WHERE id = ?").run(id);
+  return true;
+}
+
+function upsertScannedSkillRoot(db, { sourceType, agentSlug, label, value, removable }) {
+  const expandedPath = normalizeScanPath(value, sourceType);
+  const id = hashText(`${sourceType}:${expandedPath}`).slice(0, 24);
+  const now = new Date().toISOString();
+  const existsOnDisk = sourceType === "browser" ? 1 : Number(directoryExists(expandedPath));
+  const before = db.prepare("SELECT updated_at FROM skill_directory_scan WHERE id = ?").get(id);
+  db.prepare(`
+    INSERT INTO skill_directory_scan (
+      id, source_type, agent_slug, label, path, expanded_path, exists_on_disk, removable, created_at, updated_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(expanded_path) DO UPDATE SET
+      source_type = excluded.source_type,
+      agent_slug = excluded.agent_slug,
+      label = excluded.label,
+      path = excluded.path,
+      exists_on_disk = excluded.exists_on_disk,
+      removable = excluded.removable,
+      updated_at = excluded.updated_at
+  `).run(id, sourceType, agentSlug, label, value, expandedPath, existsOnDisk, Number(removable), now, now);
+  return !before;
+}
+
+function normalizeScanPath(value, sourceType) {
+  return sourceType === "browser" ? String(value) : path.resolve(expandHomePath(value));
+}
+
+function expandHomePath(value) {
+  const text = String(value || "");
+  return text.startsWith("~/") ? path.join(os.homedir(), text.slice(2)) : text;
+}
+
+function directoryExists(value) {
+  try {
+    return fsSync.statSync(value).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+function normalizeSkillPayload(skill) {
+  if (!skill?.name) {
+    throw new Error("A skill with a name is required.");
+  }
+
+  return {
+    name: String(skill.name),
+    path: String(skill.path || skill.name),
+    description: String(skill.description || ""),
+    fileStats: skill.fileStats && typeof skill.fileStats === "object"
+      ? {
+        total: Number(skill.fileStats.total || 0),
+        directories: Number(skill.fileStats.directories || 0),
+        files: Number(skill.fileStats.files || 0)
+      }
+      : null,
+    files: Array.isArray(skill.files)
+      ? skill.files.map((file) => ({
+        name: String(file.name || path.basename(file.path || "")),
+        path: String(file.path || file.name || ""),
+        type: file.type === "directory" ? "directory" : "file",
+        size: Number(file.size || 0)
+      }))
+      : []
+  };
+}
+
+function buildAnalysisCacheKey(skill, model, language) {
+  const contentHash = hashText(JSON.stringify({
+    name: skill.name,
+    description: skill.description,
+    fileStats: skill.fileStats,
+    files: skill.files.map((file) => [file.path, file.type, file.size])
+  }));
+  return {
+    contentHash,
+    cacheKey: hashText(`${analysisSchemaVersion}\n${skill.path}\n${skill.name}\n${model}\n${language}\n${contentHash}`)
+  };
+}
+
+function hashText(value) {
+  return createHash("sha256").update(String(value)).digest("hex");
+}
+
+function getCachedModelAnalysis(skill, model, language) {
+  const { cacheKey } = buildAnalysisCacheKey(skill, model, language);
+  const row = database
+    .prepare("SELECT analysis_json, updated_at FROM skill_model_analyses WHERE cache_key = ?")
+    .get(cacheKey);
+  if (!row) {
+    return null;
+  }
+
+  return {
+    ...JSON.parse(row.analysis_json),
+    cachedAt: row.updated_at
+  };
+}
+
+function saveModelAnalysis(skill, model, language, analysis) {
+  const { cacheKey, contentHash } = buildAnalysisCacheKey(skill, model, language);
+  const now = new Date().toISOString();
+  database.prepare(`
+    INSERT INTO skill_model_analyses (
+      cache_key, skill_name, skill_path, model, language, content_hash, analysis_json, created_at, updated_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(cache_key) DO UPDATE SET
+      analysis_json = excluded.analysis_json,
+      updated_at = excluded.updated_at
+  `).run(
+    cacheKey,
+    skill.name,
+    skill.path,
+    model,
+    language,
+    contentHash,
+    JSON.stringify(analysis),
+    now,
+    now
+  );
 }
 
 async function listSkills(root, language = "en") {
@@ -278,13 +758,20 @@ function analyzeSkill({ name, description, files, language = "en" }) {
   ]).flatMap(splitTriggerText);
 
   const tools = detectTools(text);
+  const extractedMethods = extractRunMethods(description, files, language);
+  const methods = extractedMethods.length ? extractedMethods : [{
+    id: "method-1",
+    label: language === "zh" ? "按描述指令执行" : "Execute documented instructions",
+    detail: buildReasoningSummary(lower, language)
+  }];
+  const decisions = buildDecisionNodes({ description, triggers, tools, files, language });
   const artifacts = files
     .filter((file) => file.type === "file")
     .map((file) => file.path)
     .filter((filePath) => /(\.md|\.json|\.ya?ml|\.sh|\.ps1|\.py|\.js|\.ts)$/i.test(filePath));
 
   const phases = [
-    phase(localize("Activation", language), localize("Match user intent against trigger phrases and skill scope.", language), triggers.length, "signal"),
+    phase(localize("Activation", language), localize("Match user intent against trigger prompts and skill scope.", language), triggers.length, "signal"),
     phase(localize("Context intake", language), localize("Read the description file and supporting assets in the skill directory.", language), files.length, "folder"),
     phase(localize("Reasoning pass", language), buildReasoningSummary(lower, language), countReasoningSignals(lower), "model"),
     phase(
@@ -304,6 +791,9 @@ function analyzeSkill({ name, description, files, language = "en" }) {
     tools,
     artifacts: artifacts.slice(0, 18),
     phases,
+    methods,
+    decisions,
+    graph: buildSkillGraph({ name, description, triggers, tools, artifacts, files, methods, decisions, language }),
     fileStats: {
       total: files.length,
       directories: files.filter((file) => file.type === "directory").length,
@@ -327,9 +817,10 @@ function collectMatches(text, patterns) {
 
 function splitTriggerText(value) {
   return value
-    .split(/[,;|]|"([^"]+)"/)
-    .map((part) => part && part.trim().replace(/^["'`]|["'`]$/g, ""))
-    .filter(Boolean)
+    .replace(/\\"/g, "\"")
+    .split(/[,;|]/)
+    .map((part) => part && part.trim().replace(/^["'`\\]+|["'`\\]+$/g, ""))
+    .filter((part) => part && part.length > 1)
     .slice(0, 20);
 }
 
@@ -355,7 +846,14 @@ function detectTools(text) {
     "python",
     "node",
     "github",
-    "playwright"
+    "playwright",
+    "gh",
+    "curl",
+    "make",
+    "helm",
+    "jq",
+    "az",
+    "func"
   ];
 
   const normalized = text.toLowerCase();
@@ -365,6 +863,172 @@ function detectTools(text) {
       name: tool,
       role: inferToolRole(tool)
     }));
+}
+
+function extractRunMethods(description, files, language = "en") {
+  const codeCommands = Array.from(description.matchAll(/```(?:bash|sh|shell|powershell|zsh)?\n([\s\S]*?)```/gi))
+    .flatMap((match) => match[1].split("\n"))
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith("#"))
+    .slice(0, 8);
+
+  const imperativeLines = description
+    .split("\n")
+    .map((line) => line.replace(/^[-*\d.)\s]+/, "").trim())
+    .filter((line) => /^(run|execute|call|invoke|use|check|create|deploy|install|configure|read|scan|validate|ask|query|list|generate|运行|执行|调用|使用|检查|创建|部署|安装|配置|读取|扫描|验证|查询|生成)/i.test(line))
+    .slice(0, 8);
+
+  const scriptFiles = files
+    .filter((file) => file.type === "file" && /\.(sh|ps1|py|js|ts|mjs|cjs)$/i.test(file.path))
+    .map((file) => language === "zh" ? `运行或引用 ${file.path}` : `Run or reference ${file.path}`)
+    .slice(0, 6);
+
+  return uniqueList([...codeCommands, ...imperativeLines, ...scriptFiles]).slice(0, 12).map((method, index) => ({
+    id: `method-${index + 1}`,
+    label: method.length > 90 ? `${method.slice(0, 87)}...` : method,
+    detail: method
+  }));
+}
+
+function buildDecisionNodes({ description, triggers, tools, files, language }) {
+  const decisions = [
+    {
+      id: "decision-trigger",
+      label: language === "zh" ? "意图是否匹配触发 Prompt？" : "Does the user intent match a trigger prompt?",
+      detail: triggers.length
+        ? (language === "zh" ? `检测到 ${triggers.length} 个触发 Prompt 信号。` : `${triggers.length} trigger prompt signals detected.`)
+        : localize("No trigger prompts or typical scenarios found in the description.", language),
+      outcome: triggers.length ? "yes" : "review"
+    },
+    {
+      id: "decision-context",
+      label: language === "zh" ? "是否有描述文件和支撑资产？" : "Are description and support files available?",
+      detail: language === "zh" ? `${files.length} 个目录项可用于推理。` : `${files.length} directory entries are available for reasoning.`,
+      outcome: files.length ? "yes" : "review"
+    },
+    {
+      id: "decision-tools",
+      label: language === "zh" ? "是否需要调用工具？" : "Does execution require tools?",
+      detail: tools.length
+        ? (language === "zh" ? `检测到 ${tools.length} 个工具面。` : `${tools.length} tool surfaces detected.`)
+        : localize("No explicit tool names detected; logic appears instruction-driven.", language),
+      outcome: tools.length ? "yes" : "manual"
+    }
+  ];
+
+  if (/ask_user|clarify|confirm|approval|permission|用户确认|澄清|批准/i.test(description)) {
+    decisions.push({
+      id: "decision-human",
+      label: language === "zh" ? "是否需要用户确认？" : "Is user confirmation required?",
+      detail: language === "zh" ? "描述中出现澄清、确认或审批信号。" : "Clarification, confirmation, or approval signals appear in the description.",
+      outcome: "conditional"
+    });
+  }
+
+  return decisions;
+}
+
+function buildSkillGraph({ name, description, triggers, tools, artifacts, files, methods, decisions, language }) {
+  const nodes = [];
+  const edges = [];
+  const addNode = (node) => {
+    nodes.push(node);
+    return node.id;
+  };
+  const addEdge = (source, target, label = "") => edges.push({ source, target, label });
+
+  const entryId = addNode(graphNode("entry", "input", language === "zh" ? "用户意图" : "User intent", name, [
+    language === "zh" ? "Skill 路由入口" : "Skill routing entry",
+    ...triggers.slice(0, 4)
+  ]));
+  const triggerId = addNode(graphNode("trigger", "decision", decisions[0].label, decisions[0].detail, triggers.slice(0, 8)));
+  const manifestId = addNode(graphNode("manifest", "document", language === "zh" ? "读取 Skill 描述" : "Read skill manifest", extractSummary(description) || name, [
+    language === "zh" ? "解析描述、触发条件和约束" : "Parse description, triggers, and constraints"
+  ]));
+  const contextId = addNode(graphNode("context", "filesystem", language === "zh" ? "扫描目录资产" : "Scan directory assets", decisions[1].detail, files.slice(0, 10).map((file) => file.path)));
+  addEdge(entryId, triggerId, language === "zh" ? "匹配" : "match");
+  addEdge(triggerId, manifestId, decisions[0].outcome);
+  addEdge(manifestId, contextId, language === "zh" ? "读取" : "read");
+
+  let previous = contextId;
+  for (const decision of decisions.slice(1)) {
+    const decisionId = addNode(graphNode(decision.id, "decision", decision.label, decision.detail, [decision.outcome]));
+    addEdge(previous, decisionId, language === "zh" ? "判断" : "decide");
+    previous = decisionId;
+  }
+
+  const methodItems = methods.length ? methods : [{
+    id: "method-1",
+    label: language === "zh" ? "按描述指令执行" : "Execute documented instructions",
+    detail: buildReasoningSummary(description.toLowerCase(), language)
+  }];
+  for (const method of methodItems.slice(0, 6)) {
+    const methodId = addNode(graphNode(method.id, "method", method.label, method.detail, [
+      language === "zh" ? "运行方法" : "run method"
+    ]));
+    addEdge(previous, methodId, language === "zh" ? "执行" : "execute");
+    previous = methodId;
+  }
+
+  const toolHubId = addNode(graphNode("tool-hub", "tool", language === "zh" ? "工具编排" : "Tool orchestration", localizeToolCount(tools.length, language), tools.map((tool) => `${tool.name}: ${tool.role}`)));
+  addEdge(previous, toolHubId, tools.length ? (language === "zh" ? "调用" : "call") : (language === "zh" ? "可选" : "optional"));
+
+  for (const tool of tools.slice(0, 8)) {
+    const toolId = addNode(graphNode(`tool-${tool.name}`, "tool", tool.name, tool.role, [
+      language === "zh" ? "检测到的执行工具" : "Detected execution tool"
+    ]));
+    addEdge(toolHubId, toolId, language === "zh" ? "使用" : "uses");
+  }
+
+  const outputId = addNode(graphNode("output", "output", language === "zh" ? "结果交付" : "Output handoff", buildOutputSummary(description.toLowerCase(), language), artifacts.slice(0, 8)));
+  addEdge(toolHubId, outputId, language === "zh" ? "产出" : "produce");
+
+  return layoutGraph(nodes, edges);
+}
+
+function graphNode(id, type, title, detail, evidence = []) {
+  return {
+    id,
+    type,
+    title,
+    detail,
+    evidence: evidence.filter(Boolean).slice(0, 10)
+  };
+}
+
+function layoutGraph(nodes, edges) {
+  const columns = {
+    entry: 0,
+    trigger: 1,
+    manifest: 2,
+    context: 3,
+    "decision-context": 4,
+    "decision-tools": 5,
+    "decision-human": 6,
+    "tool-hub": 9,
+    output: 11
+  };
+  const typeColumns = { input: 0, decision: 2, document: 3, filesystem: 4, method: 7, tool: 10, output: 11 };
+  const rowCounts = new Map();
+
+  const laidOutNodes = nodes.map((node, index) => {
+    const column = columns[node.id] ?? typeColumns[node.type] ?? Math.min(index, 11);
+    const row = rowCounts.get(column) || 0;
+    rowCounts.set(column, row + 1);
+    return {
+      ...node,
+      x: 80 + column * 290,
+      y: 90 + row * 170
+    };
+  });
+
+  const width = Math.max(...laidOutNodes.map((node) => node.x), 1000) + 340;
+  const height = Math.max(...laidOutNodes.map((node) => node.y), 420) + 180;
+  return { nodes: laidOutNodes, edges, width, height };
+}
+
+function uniqueList(values) {
+  return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
 }
 
 function inferToolRole(tool) {
@@ -412,7 +1076,7 @@ function buildSkillSummary(description, tools, triggers, files, language = "en")
   clauses.push(language === "zh" ? `已扫描 ${files.length} 个目录项` : `${files.length} directory entries scanned`);
   clauses.push(language === "zh" ? `检测到 ${tools.length} 个工具面` : `${tools.length} tool surfaces detected`);
   if (triggers.length) {
-    clauses.push(language === "zh" ? `发现 ${triggers.length} 个触发短语` : `${triggers.length} activation phrases found`);
+    clauses.push(language === "zh" ? `发现 ${triggers.length} 个触发 Prompt 信号` : `${triggers.length} trigger prompt signals found`);
   }
   return clauses.join(" · ");
 }
@@ -434,9 +1098,12 @@ async function getGitHubAuthStatus() {
     const hosts = Object.values(parsed.hosts || {}).flat();
     const active = hosts.find((host) => host.active) || hosts.find((host) => host.state === "success");
     const scopes = typeof active?.scopes === "string" ? active.scopes.split(/,\s*/) : active?.scopes || [];
+    const profile = active ? await getGitHubProfile() : {};
     return {
       authenticated: Boolean(active),
-      login: active?.login || "",
+      login: profile.login || active?.login || "",
+      name: profile.name || "",
+      avatarUrl: profile.avatar_url || "",
       scopes,
       needsCopilotScope: Boolean(active) && !scopes.includes("copilot")
     };
@@ -447,6 +1114,15 @@ async function getGitHubAuthStatus() {
       scopes: [],
       error: error.message
     };
+  }
+}
+
+async function getGitHubProfile() {
+  try {
+    const { stdout } = await execFileAsync("gh", ["api", "user"], { timeout: 6000 });
+    return JSON.parse(stdout);
+  } catch {
+    return {};
   }
 }
 
@@ -471,6 +1147,38 @@ function normalizeModels(models) {
   return normalized.length ? normalized : fallbackModels;
 }
 
+async function generateModelLogicMap(skill, model, language = "en") {
+  const ruleAnalysis = analyzeSkill({ name: skill.name, description: skill.description, files: skill.files, language });
+  if (skill.fileStats) {
+    ruleAnalysis.fileStats = skill.fileStats;
+  }
+  const { approveAll, CopilotClient } = await import("@github/copilot-sdk");
+  const selectedModel = model && model !== "github-default" ? model : undefined;
+  const client = new CopilotClient({ logLevel: "error" });
+  try {
+    await withTimeout(client.start(), 10_000, "Timed out while starting Copilot SDK runtime.");
+    const session = await client.createSession({
+      onPermissionRequest: approveAll,
+      ...(selectedModel ? { model: selectedModel } : {})
+    });
+    try {
+      const reply = await withTimeout(
+        session.sendAndWait({
+          prompt: buildLogicMapPrompt(skill, ruleAnalysis, language)
+        }),
+        35_000,
+        "Timed out while generating model-driven logic map."
+      );
+      const parsed = parseModelJson(reply?.data?.content || "");
+      return normalizeModelLogicMap(parsed, ruleAnalysis, model, language);
+    } finally {
+      await session[Symbol.asyncDispose]?.();
+    }
+  } finally {
+    await client[Symbol.asyncDispose]?.();
+  }
+}
+
 function buildModelPrompt(skill, language = "en") {
   const fileList = (skill.files || []).slice(0, 80).map((file) => `- ${file.type}: ${file.path}`).join("\n");
   const instruction =
@@ -489,11 +1197,243 @@ Files:
 ${fileList}`;
 }
 
+function buildLogicMapPrompt(skill, ruleAnalysis, language = "en") {
+  const fileList = (skill.files || []).slice(0, 80).map((file) => `- ${file.type}: ${file.path}`).join("\n");
+  const rulesGraph = JSON.stringify({
+    summary: ruleAnalysis.summary,
+    ruleComplexityScore: calculateRuleComplexity(ruleAnalysis),
+    fileStats: ruleAnalysis.fileStats,
+    sampledFiles: skill.files.length,
+    triggers: ruleAnalysis.triggers,
+    tools: ruleAnalysis.tools,
+    methods: ruleAnalysis.methods?.map((method) => method.label),
+    decisions: ruleAnalysis.decisions?.map((decision) => decision.label)
+  }, null, 2);
+  const localeInstruction = language === "zh"
+    ? "所有 title、detail、label、summary、insight 使用中文。"
+    : "Use English for every title, detail, label, summary, and insight.";
+
+  return `You are generating a Skill execution logic map for a local visualization app.
+Return only valid JSON. Do not wrap it in markdown.
+${localeInstruction}
+
+Required JSON shape:
+{
+  "summary": "one sentence skill execution summary",
+  "insight": "2-3 concise sentences explaining the model-generated logic map",
+  "complexity": { "score": 0-99, "rationale": "why this Skill is simple or complex" },
+  "roi": { "score": 0-99, "manualTimeEstimate": "traditional human execution time, e.g. 45 min or 3-5 hours", "rationale": "why this saves that much effort" },
+  "activationPhrases": [
+    { "prompt": "realistic user prompt that should trigger this Skill", "useCase": "typical scenario where this Skill is useful" },
+    { "prompt": "realistic user prompt that should trigger this Skill", "useCase": "typical scenario where this Skill is useful" },
+    { "prompt": "realistic user prompt that should trigger this Skill", "useCase": "typical scenario where this Skill is useful" }
+  ],
+  "nodes": [
+    { "id": "stable-kebab-id", "type": "input|decision|document|filesystem|method|tool|output", "title": "short title", "detail": "short operational detail", "evidence": ["source phrase or file"] }
+  ],
+  "edges": [
+    { "source": "node id", "target": "node id", "label": "short transition label" }
+  ]
+}
+
+Create 6 to 14 nodes. Keep node detail under 140 characters. Use evidence from the description or file list.
+The graph must start with an input node and end with an output node.
+Complexity score must use one unified 0-99 scale: execution branches, tool orchestration, required context, artifact count, and risk/approval burden.
+ROI score must use traditional manual execution time as the main standard: higher score means the Skill replaces more manual human work.
+For activationPhrases, return exactly 3 items. Each item must pair:
+- prompt: a complete user prompt that would naturally trigger this Skill in an agent conversation.
+- useCase: the typical task scenario represented by that prompt.
+If the Skill description contains WHEN/trigger hints, convert the most representative ones into full user prompts instead of copying keywords verbatim. If no trigger hints are present, infer realistic prompts and scenarios from the Skill description and files.
+
+Skill: ${skill.name}
+
+Rule analysis context:
+${rulesGraph}
+
+Description:
+${String(skill.description).slice(0, 7000)}
+
+Files:
+The list below is a representative sample when the Skill directory is very large.
+${fileList}`;
+}
+
+function parseModelJson(content) {
+  const trimmed = String(content || "").trim();
+  if (!trimmed) {
+    throw new Error("No model response was returned.");
+  }
+
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    const match = trimmed.match(/\{[\s\S]*\}/);
+    if (!match) {
+      throw new Error("Model response did not contain JSON.");
+    }
+    return JSON.parse(match[0]);
+  }
+}
+
+function normalizeModelLogicMap(parsed, ruleAnalysis, model, language) {
+  const rawNodes = Array.isArray(parsed.nodes) ? parsed.nodes : parsed.graph?.nodes;
+  const rawEdges = Array.isArray(parsed.edges) ? parsed.edges : parsed.graph?.edges;
+  if (!Array.isArray(rawNodes) || rawNodes.length < 2) {
+    throw new Error("Model response did not include enough graph nodes.");
+  }
+
+  const allowedTypes = new Set(["input", "decision", "document", "filesystem", "method", "tool", "output"]);
+  const seenIds = new Set();
+  const nodes = rawNodes.slice(0, 18).map((node, index) => {
+    const fallbackId = `model-node-${index + 1}`;
+    const id = uniqueNodeId(slugify(node.id || node.title || fallbackId) || fallbackId, seenIds);
+    return graphNode(
+      id,
+      allowedTypes.has(node.type) ? node.type : "method",
+      String(node.title || id).slice(0, 80),
+      String(node.detail || "").slice(0, 220),
+      Array.isArray(node.evidence) ? node.evidence.map((item) => String(item)).slice(0, 10) : []
+    );
+  });
+  const idSet = new Set(nodes.map((node) => node.id));
+  const idByOriginal = new Map(rawNodes.slice(0, 18).map((node, index) => [String(node.id || node.title || `model-node-${index + 1}`), nodes[index].id]));
+  const edges = Array.isArray(rawEdges)
+    ? rawEdges
+      .map((edge) => ({
+        source: idByOriginal.get(String(edge.source)) || slugify(edge.source),
+        target: idByOriginal.get(String(edge.target)) || slugify(edge.target),
+        label: String(edge.label || "").slice(0, 32)
+      }))
+      .filter((edge) => idSet.has(edge.source) && idSet.has(edge.target))
+      .slice(0, 24)
+    : [];
+
+  if (!edges.length && nodes.length > 1) {
+    for (let index = 0; index < nodes.length - 1; index += 1) {
+      edges.push({ source: nodes[index].id, target: nodes[index + 1].id, label: language === "zh" ? "然后" : "then" });
+    }
+  }
+
+  return {
+    source: "copilot-sdk",
+    model,
+    summary: String(parsed.summary || ruleAnalysis.summary).slice(0, 240),
+    insight: String(parsed.insight || "").slice(0, 800),
+    complexity: normalizeScorePayload(parsed.complexity, calculateRuleComplexity(ruleAnalysis), language === "zh" ? "模型基于执行分支、工具编排和风险判断评分。" : "Model scored execution branches, tool orchestration, and risk burden."),
+    roi: normalizeRoiPayload(parsed.roi, language),
+    activationPhrases: normalizeActivationPhrases(parsed.activationPhrases || parsed.triggers || parsed.examplePrompts, ruleAnalysis.triggers, language),
+    graph: layoutGraph(nodes, edges),
+    generatedAt: new Date().toISOString()
+  };
+}
+
+function normalizeActivationPhrases(value, fallbackTriggers, language) {
+  const phrases = Array.isArray(value)
+    ? value.map((item) => formatActivationPrompt(item, language))
+    : typeof value === "string"
+      ? value.split(/\n|;|\|/)
+      : [];
+  const normalized = uniqueList(phrases.map((phrase) => String(phrase).replace(/^[-*\d.)\s]+/, "").trim()))
+    .filter((phrase) => phrase.length > 3)
+    .slice(0, 3);
+  const fallbackExamples = fallbackTriggers?.length
+    ? fallbackTriggers.slice(0, 3).map((trigger) => formatFallbackActivationPrompt(trigger, language)).filter(Boolean)
+    : [];
+  if (normalized.length) {
+    return uniqueList([...normalized, ...fallbackExamples]).slice(0, 3);
+  }
+  if (fallbackExamples.length) {
+    return fallbackExamples;
+  }
+  return language === "zh"
+    ? [
+      "Prompt：请判断当前任务是否应该调用这个 Skill，并按它的流程执行。 · 场景：用户需要把模糊需求路由到专门 Skill。",
+      "Prompt：请用这个 Skill 帮我完成对应的自动化任务。 · 场景：用户已经知道任务类型与该 Skill 匹配。",
+      "Prompt：根据当前上下文，使用该 Skill 生成可执行方案。 · 场景：用户需要从 Skill 说明转成具体执行步骤。"
+    ]
+    : [
+      "Prompt: Decide whether this task should use this Skill and run its workflow. · Scenario: A broad request needs routing to a specialized Skill.",
+      "Prompt: Use this Skill to complete the matching automation task. · Scenario: The user already knows this Skill fits the task.",
+      "Prompt: Based on my current context, use this Skill to produce an executable plan. · Scenario: The user needs Skill instructions turned into concrete steps."
+    ];
+}
+
+function formatActivationPrompt(item, language) {
+  if (item && typeof item === "object") {
+    const prompt = String(item.prompt || item.triggerPrompt || item.examplePrompt || item.phrase || "").trim();
+    const useCase = String(item.useCase || item.scenario || item.typicalUseCase || "").trim();
+    if (prompt && useCase) {
+      return language === "zh"
+        ? `Prompt：${prompt} · 场景：${useCase}`
+        : `Prompt: ${prompt} · Scenario: ${useCase}`;
+    }
+    return prompt || useCase;
+  }
+  return item;
+}
+
+function formatFallbackActivationPrompt(trigger, language) {
+  const text = String(trigger || "").trim();
+  if (!text) {
+    return "";
+  }
+  return language === "zh"
+    ? `Prompt：${text} · 场景：用户明确提出与该触发条件匹配的任务。`
+    : `Prompt: ${text} · Scenario: The user asks for a task matching this trigger condition.`;
+}
+
+function normalizeScorePayload(value, fallbackScore, fallbackRationale) {
+  const score = clampScore(value?.score ?? fallbackScore);
+  return {
+    score,
+    rationale: String(value?.rationale || fallbackRationale).slice(0, 120)
+  };
+}
+
+function normalizeRoiPayload(value, language) {
+  return {
+    score: clampScore(value?.score ?? 0),
+    manualTimeEstimate: String(value?.manualTimeEstimate || value?.manualTime || (language === "zh" ? "未估算" : "Not estimated")).slice(0, 80),
+    rationale: String(value?.rationale || (language === "zh" ? "模型未返回 ROI 解释。" : "The model did not return an ROI rationale.")).slice(0, 160)
+  };
+}
+
+function clampScore(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return 0;
+  }
+  return Math.max(0, Math.min(99, Math.round(numeric)));
+}
+
+function calculateRuleComplexity(analysis) {
+  return Math.min(99, analysis.fileStats.files * 2 + analysis.tools.length * 7 + analysis.triggers.length * 3);
+}
+
+function slugify(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\u4e00-\u9fa5]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48);
+}
+
+function uniqueNodeId(id, seenIds) {
+  let candidate = id;
+  let counter = 2;
+  while (seenIds.has(candidate)) {
+    candidate = `${id}-${counter}`;
+    counter += 1;
+  }
+  seenIds.add(candidate);
+  return candidate;
+}
+
 const translations = {
   zh: {
     "No description file detected.": "未检测到描述文件。",
     "Activation": "触发识别",
-    "Match user intent against trigger phrases and skill scope.": "将用户意图匹配到触发短语和 Skill 适用范围。",
+    "Match user intent against trigger prompts and skill scope.": "将用户意图匹配到触发 Prompt 和 Skill 适用范围。",
     "Context intake": "上下文读取",
     "Read the description file and supporting assets in the skill directory.": "读取描述文件和 Skill 目录中的支撑资产。",
     "Reasoning pass": "推理编排",
@@ -508,6 +1448,7 @@ const translations = {
     "Return generated assets or code changes with validation guidance.": "返回生成资产或代码变更，并附带验证建议。",
     "Leave the user with a deployed or deployment-ready workload.": "交付已部署或可部署的工作负载。",
     "Return a concise, action-oriented handoff.": "返回简洁、面向行动的交付说明。",
+    "No trigger prompts or typical scenarios found in the description.": "描述中未找到触发 Prompt 或典型使用场景。",
     "Model insight is unavailable. Sign in with GitHub and refresh Copilot scopes to enable SDK-driven analysis.": "模型洞察不可用。请登录 GitHub 并刷新 Copilot 权限后启用 SDK 驱动分析。"
   }
 };

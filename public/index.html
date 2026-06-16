@@ -8,38 +8,44 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
+    <header class="top-nav">
+      <div class="nav-brand">
+        <div class="brand-mark" aria-hidden="true">S</div>
+        <div>
+          <p class="eyebrow">Skill OS</p>
+          <h1>Logic Visualizer</h1>
+        </div>
+      </div>
+      <div class="nav-actions">
+        <button id="themeToggle" class="theme-toggle" type="button" aria-label="Switch to dark theme" title="Switch theme">
+          <span class="theme-icon sun" aria-hidden="true">☀</span>
+          <span class="theme-icon moon" aria-hidden="true">☾</span>
+        </button>
+        <button id="openSettings" class="settings-button" type="button" aria-label="Settings" title="Settings">
+          <span class="settings-icon" aria-hidden="true">⚙</span>
+        </button>
+        <button id="githubLogin" class="nav-button ghost" type="button">Sign in with GitHub</button>
+      </div>
+    </header>
+
     <div class="shell">
       <aside class="sidebar" aria-label="Skill list">
-        <div class="brand">
-          <div class="brand-mark" aria-hidden="true">S</div>
-          <div>
-            <p class="eyebrow">Skill OS</p>
-            <h1>Logic Visualizer</h1>
-          </div>
-        </div>
-
-        <div class="side-actions" aria-label="Account and settings">
-          <button id="githubLogin" class="side-action" type="button">Sign in with GitHub</button>
-          <button id="openSettings" class="side-action" type="button">Settings</button>
-        </div>
-
         <div class="path-card">
           <label for="skillRootSelect">Skill directory</label>
           <div class="path-row">
             <select id="skillRootSelect"></select>
-            <button id="loadPath" type="button">Load</button>
+            <button id="deletePath" class="danger-button" type="button">Delete</button>
           </div>
-          <div class="path-row">
-            <input id="skillRoot" type="text" spellcheck="false" placeholder="Add custom path..." />
-            <button id="addPath" type="button">Add</button>
+          <div class="directory-actions">
+            <button id="pickDirectory" class="ghost-button" type="button">Choose local skills directory</button>
+            <button id="scanDirectories" class="ghost-button" type="button">Scan</button>
           </div>
-          <button id="pickDirectory" class="ghost-button" type="button">Choose local skills directory</button>
           <p id="pathHint" class="hint">Default path is read by the local Node server.</p>
         </div>
 
@@ -47,6 +53,9 @@
           <span>Skills</span>
           <strong id="skillCount">0</strong>
         </div>
+        <label class="skill-search" for="skillSearch">
+          <input id="skillSearch" type="search" autocomplete="off" placeholder="Search by name" />
+        </label>
         <div id="skillList" class="skill-list" role="listbox" aria-label="Available skills"></div>
         <div class="pager" aria-label="Skill pagination">
           <button id="prevPage" type="button">Previous</button>
@@ -56,25 +65,31 @@
       </aside>
 
       <main class="workspace">
-        <section class="hero">
+        <section id="introHero" class="hero flow-hero">
           <div>
             <p class="eyebrow">Execution cartography for agent skills</p>
-            <h2>Turn a skill folder into a live logic map.</h2>
+            <h2>Map the skill like an agent flow.</h2>
             <p>
-              Inspect activation phrases, supporting files, tool surfaces, and inferred execution phases in one
-              startup-grade command deck.
+              Pan across decisions, run methods, tools, and outputs. Click any node to inspect the exact evidence behind it.
             </p>
           </div>
-          <div class="signal-panel" aria-hidden="true">
-            <span></span><span></span><span></span><span></span>
-            <div class="signal-core">RUN</div>
+          <div class="flow-legend" aria-label="Graph legend">
+            <span><i class="legend-dot input"></i>Input</span>
+            <span><i class="legend-dot decision"></i>Decision</span>
+            <span><i class="legend-dot method"></i>Method</span>
+            <span><i class="legend-dot tool"></i>Tool</span>
           </div>
         </section>
 
         <section id="emptyState" class="empty-state">
           <p class="eyebrow">No skill selected</p>
           <h3>Select a skill from the sidebar.</h3>
-          <p>The app will read its description file, scan the directory, and render an execution logic view.</p>
+          <p>The app reads a Skill directory, extracts activation phrases, run methods, tool usage, file structure, and model-driven insight, then turns that logic into an interactive horizontal map.</p>
+          <div class="empty-guide">
+            <span>1. Choose a Skill directory from the sidebar.</span>
+            <span>2. Select a Skill name to analyze its files and description.</span>
+            <span>3. Click graph nodes to inspect decisions, tools, evidence, and outputs.</span>
+          </div>
         </section>
 
         <section id="detail" class="detail hidden" aria-live="polite">
@@ -83,36 +98,86 @@
               <p id="skillPath" class="eyebrow"></p>
               <h3 id="skillName"></h3>
               <p id="skillSummary"></p>
+              <div class="evaluation-actions">
+                <button id="refreshLogicMap" class="refresh-button" type="button">AI evaluation</button>
+                <small id="evaluationStatus">Current score is rules-based. Use AI evaluation for full assessment.</small>
+              </div>
             </div>
             <div class="score-card">
               <span>Complexity</span>
               <strong id="complexityScore">0</strong>
+              <small id="complexityMeta">Rules score</small>
+            </div>
+            <div class="score-card roi-card">
+              <span>ROI</span>
+              <strong id="roiScore">—</strong>
+              <small id="roiMeta">Not evaluated</small>
             </div>
           </div>
 
-          <div class="logic-grid">
-            <article class="map-card">
+          <div class="top-insight-grid">
+            <article class="model-card">
               <div class="card-title">
-                <span>Logic map</span>
-                <small>Inferred execution flow</small>
+                <span id="modelInsightTitle">Model insight</span>
+                <small id="modelInsightMeta">GitHub Copilot SDK</small>
               </div>
-              <div id="logicMap" class="logic-map"></div>
-            </article>
-
-            <article class="tool-card">
-              <div class="card-title">
-                <span>Tool stack</span>
-                <small>Detected from docs and file names</small>
-              </div>
-              <div id="toolStack" class="chip-grid"></div>
+              <div id="modelInsight" class="model-insight">Select a skill to request model-driven analysis.</div>
             </article>
 
             <article class="trigger-card">
               <div class="card-title">
-                <span>Activation phrases</span>
-                <small>Signals that route to this skill</small>
+                <span>Trigger prompts</span>
+                <small>Prompts and typical scenarios that activate this skill</small>
               </div>
               <div id="triggerList" class="phrase-list"></div>
+            </article>
+          </div>
+
+          <div class="flow-layout">
+            <article class="map-card flow-card">
+              <div class="card-title">
+                <div class="card-heading">
+                  <span id="logicMapTitle">Logic map</span>
+                  <small id="logicMapMeta">Horizontal execution panorama</small>
+                </div>
+              </div>
+              <div class="flow-toolbar">
+                <span id="flowStats">0 nodes · 0 edges</span>
+                <span>Drag horizontally or use trackpad scroll. Click a node for details.</span>
+              </div>
+              <div id="logicMap" class="flow-canvas" tabindex="0" aria-label="Interactive skill logic graph">
+                <div id="flowScene" class="flow-scene">
+                  <svg id="flowEdges" class="flow-edges" aria-hidden="true"></svg>
+                  <div id="flowNodes" class="flow-nodes"></div>
+                </div>
+              </div>
+            </article>
+
+            <aside class="node-inspector">
+              <div class="card-title">
+                <span id="nodeDetailTitle">Node detail</span>
+                <small id="nodeDetailType">Select a node</small>
+              </div>
+              <p id="nodeDetailBody">Click a graph node to inspect its role, evidence, and downstream execution path.</p>
+              <div id="nodeEvidence" class="node-evidence"></div>
+            </aside>
+          </div>
+
+          <div class="evidence-grid">
+            <article class="tool-card">
+              <div class="card-title">
+                <span>Tool stack</span>
+                <small>Detected execution surfaces</small>
+              </div>
+              <div id="toolStack" class="chip-grid"></div>
+            </article>
+
+            <article class="method-card">
+              <div class="card-title">
+                <span id="methodTitle">Run methods</span>
+                <small id="methodMeta">Commands and procedural steps</small>
+              </div>
+              <div id="methodList" class="method-list"></div>
             </article>
 
             <article class="file-card">
@@ -123,14 +188,6 @@
               <div id="fileTree" class="file-tree"></div>
             </article>
           </div>
-
-          <article class="model-card">
-            <div class="card-title">
-              <span id="modelInsightTitle">Model insight</span>
-              <small id="modelInsightMeta">GitHub Copilot SDK</small>
-            </div>
-            <div id="modelInsight" class="model-insight">Select a skill to request model-driven analysis.</div>
-          </article>
 
           <article class="description-card">
             <div class="card-title">
@@ -154,7 +211,7 @@
         </div>
 
         <label class="field">
-          <span>Display language</span>
+          <span id="languageFieldLabel">Display language</span>
           <select id="languageSelect">
             <option value="en">English</option>
             <option value="zh">中文</option>
@@ -162,7 +219,7 @@
         </label>
 
         <label class="field">
-          <span>Default model</span>
+          <span id="modelFieldLabel">Default model</span>
           <select id="modelSelect">
             <option value="github-default">GitHub default</option>
           </select>
@@ -171,6 +228,33 @@
         <div class="auth-panel">
           <span id="githubStatus">GitHub status unknown</span>
           <button id="checkGithub" type="button">Check status</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="directoryConfirmPanel" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="directoryConfirmTitle">
+      <div class="modal-card">
+        <div class="modal-top">
+          <div>
+            <p class="eyebrow" id="directoryConfirmEyebrow">Local Skill root</p>
+            <h3 id="directoryConfirmTitle">Add directory</h3>
+          </div>
+          <button id="closeDirectoryConfirm" class="icon-button" type="button" aria-label="Close">×</button>
+        </div>
+
+        <div class="directory-summary">
+          <span id="directoryConfirmPath"></span>
+          <strong id="directoryConfirmCount"></strong>
+        </div>
+
+        <label class="field">
+          <span id="directoryNameLabel">Directory display name</span>
+          <input id="directoryNameInput" type="text" autocomplete="off" />
+        </label>
+
+        <div class="modal-actions">
+          <button id="cancelDirectoryConfirm" class="ghost-button" type="button">Cancel</button>
+          <button id="saveDirectoryConfirm" class="nav-button primary" type="button">Save directory</button>
         </div>
       </div>
     </div>
