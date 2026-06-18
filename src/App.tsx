@@ -203,6 +203,15 @@ type ModelInfo = {
   source?: string;
 };
 
+type ModelsResponse = {
+  source: string;
+  error?: string;
+  authRequired?: boolean;
+  authHelp?: string;
+  authCommand?: string;
+  models: ModelInfo[];
+};
+
 type GitHubStatus = {
   cliInstalled?: boolean;
   tokenAvailable?: boolean;
@@ -304,7 +313,6 @@ const copy = {
     guideGraph: "Inspect nodes, evidence, tools, and source files.",
     complexity: "Complexity",
     roi: "ROI",
-    ruleScore: "Rules score",
     modelScore: "Model score",
     roiNotEvaluated: "Not evaluated",
     manualTimePrefix: "Manual: ",
@@ -314,7 +322,7 @@ const copy = {
     rulesAnalysis: "Rules analysis",
     cachedModelAnalysis: "Cached model analysis",
     historicalModelAnalysis: "Historical cached model analysis",
-    rulesEvaluationPrompt: "Rules-based score. Run AI evaluation for a model assessment.",
+    rulesEvaluationPrompt: "Rules analysis is shown. Run AI evaluation to show model scores.",
     noCachedModelAnalysis: "Rules analysis is shown. Run AI evaluation to generate and cache model insight.",
     modelAnalysisLoaded: "Loaded cached model logic map.",
     modelAnalysisSaved: "Generated and cached model logic map.",
@@ -344,6 +352,7 @@ const copy = {
     modelIdle: "Select a skill to request model-driven analysis.",
     displayLanguage: "Display language",
     defaultModel: "Default model",
+    loadingModels: "Loading models...",
     checkStatus: "Check status",
     save: "Save",
     noSkills: "No skill directories found.",
@@ -424,7 +433,6 @@ const copy = {
     guideGraph: "检查节点、证据、工具与源文件。",
     complexity: "复杂度",
     roi: "ROI",
-    ruleScore: "规则评分",
     modelScore: "模型评分",
     roiNotEvaluated: "未评估",
     manualTimePrefix: "人工：",
@@ -434,7 +442,7 @@ const copy = {
     rulesAnalysis: "规则分析",
     cachedModelAnalysis: "已缓存的模型分析",
     historicalModelAnalysis: "历史缓存的模型分析",
-    rulesEvaluationPrompt: "当前是规则评分。运行 AI 评估获取模型评估。",
+    rulesEvaluationPrompt: "当前显示规则分析。运行 AI 评估后显示模型评分。",
     noCachedModelAnalysis: "当前显示规则分析。运行 AI 评估可生成并缓存模型洞察。",
     modelAnalysisLoaded: "已加载缓存的模型逻辑图。",
     modelAnalysisSaved: "已生成并缓存模型逻辑图。",
@@ -464,6 +472,7 @@ const copy = {
     modelIdle: "选择一个 Skill 后请求模型驱动分析。",
     displayLanguage: "显示语言",
     defaultModel: "默认模型",
+    loadingModels: "正在读取模型列表...",
     checkStatus: "检查状态",
     save: "保存",
     noSkills: "未找到 Skill 目录。",
@@ -516,6 +525,7 @@ function App() {
   const [githubStatus, setGitHubStatus] = useState<GitHubStatus | null>(null);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [loadingSettingsModels, setLoadingSettingsModels] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem(storageKeys.sidebar) === "1");
   const [skillDocCollapsed, setSkillDocCollapsed] = useState(() => localStorage.getItem(storageKeys.skillDocPanel) !== "0");
   const [skillDocMode, setSkillDocMode] = useState<"original" | "translated">("original");
@@ -529,6 +539,8 @@ function App() {
   const skillListRef = useRef<HTMLDivElement | null>(null);
   const skillPaginationRef = useRef<HTMLDivElement | null>(null);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
+  const settingsModelsRequestRef = useRef(0);
+  const settingsModelsLoadedRef = useRef(false);
 
   const text = copy[language];
   const evaluationProgressText = evaluationStatus;
@@ -677,6 +689,11 @@ function App() {
     };
   }, [accountMenuOpen]);
 
+  useEffect(() => {
+    if (!settingsOpen) return;
+    void loadSettingsModels();
+  }, [settingsOpen]);
+
   async function initialize() {
     try {
       const config = await fetchJson<{ defaultModel?: string }>("/api/config");
@@ -684,10 +701,8 @@ function App() {
       setModel(configuredModel);
       const rootsResult = await fetchJson<{ roots: SkillRoot[] }>("/api/skill-roots");
       applyRoots(rootsResult.roots || []);
-      await Promise.all([
-        loadModels(configuredModel),
-        syncGitHubStatusOnStartup()
-      ]);
+      void loadModels(configuredModel);
+      void syncGitHubStatusOnStartup();
       const firstRoot = rootsResult.roots?.[0];
       if (firstRoot) {
         await loadSkillsFromServer(firstRoot);
@@ -705,8 +720,8 @@ function App() {
     setRootId(nextRoot?.id || "");
   }
 
-  async function loadModels(currentModel: string, options: { live?: boolean; preferDefault?: boolean } = {}) {
-    const result = await fetchJson<{ source: string; error?: string; authRequired?: boolean; authHelp?: string; authCommand?: string; models: ModelInfo[] }>(`/api/models${options.live ? "?live=1" : ""}`);
+  async function loadModels(currentModel: string, options: { live?: boolean; preferDefault?: boolean; showAuthGuide?: boolean } = {}) {
+    const result = await fetchJson<ModelsResponse>(`/api/models${options.live ? "?live=1" : ""}`);
     const nextModels = result.models || [];
     setModels(nextModels);
     const hasCurrentModel = nextModels.some((item) => item.id === currentModel);
@@ -714,11 +729,12 @@ function App() {
     if (!hasCurrentModel || options.preferDefault) {
       setModel(preferredModel);
     }
-    if (result.authRequired) {
+    if (result.authRequired && options.showAuthGuide !== false) {
       showGitHubAuthGuide({ authHelp: result.authHelp, authCommand: result.authCommand }, text, refreshGitHubStatus);
     } else if (result.source === "fallback" && result.error) {
       toast.warning(result.error);
     }
+    return result;
   }
 
   async function refreshGitHubStatus(showToast = true) {
@@ -726,7 +742,6 @@ function App() {
     setGitHubStatus(status);
     if (status.ready) {
       toast.dismiss(githubAuthToastId);
-      await loadModels(model, { live: true, preferDefault: model === "gpt-5" });
     }
     if (showToast) {
       toast(status.authenticated ? `${text.signedIn}: ${status.login || "GitHub"}` : text.notSignedIn);
@@ -740,10 +755,39 @@ function App() {
       setGitHubStatus(status);
       if (status.ready) {
         toast.dismiss(githubAuthToastId);
-        await loadModels(model, { live: true, preferDefault: model === "gpt-5" });
       }
     } catch (error) {
       console.warn("Unable to sync GitHub status on startup", error);
+    }
+  }
+
+  async function loadSettingsModels() {
+    if (settingsModelsLoadedRef.current) {
+      return;
+    }
+    const requestId = ++settingsModelsRequestRef.current;
+    setLoadingSettingsModels(true);
+    try {
+      const status = await fetchJson<GitHubStatus>("/api/auth/github/status?check=1");
+      if (requestId !== settingsModelsRequestRef.current) {
+        return;
+      }
+      setGitHubStatus(status);
+      if (!status.ready) {
+        showGitHubAuthGuide(status, text, refreshGitHubStatus);
+        return;
+      }
+      toast.dismiss(githubAuthToastId);
+      const result = await loadModels(model, { live: true, preferDefault: model === "gpt-5" });
+      if (requestId === settingsModelsRequestRef.current && result.source === "copilot-sdk" && !result.authRequired) {
+        settingsModelsLoadedRef.current = true;
+      }
+    } catch (error) {
+      notifyError(error);
+    } finally {
+      if (requestId === settingsModelsRequestRef.current) {
+        setLoadingSettingsModels(false);
+      }
     }
   }
 
@@ -753,7 +797,6 @@ function App() {
       setGitHubStatus(status);
       if (status.ready) {
         toast.dismiss(githubAuthToastId);
-        await loadModels(model, { live: true, preferDefault: model === "gpt-5" });
         toast.success(`${text.signedIn}: ${status.login || "GitHub"}`);
         return;
       }
@@ -1038,11 +1081,15 @@ function App() {
     setLogicMapMeta(text.generatingLogicMap);
     setEvaluationStatus(text.generatingLogicMap);
     try {
-      const result = await fetchJson<{ analysis: ModelAnalysis; translation?: SkillTranslation }>("/api/logic-map/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(buildLogicMapPayload(selectedSkill, model, language, progressRequestId))
-      });
+      let result: { analysis: ModelAnalysis; translation?: SkillTranslation };
+      try {
+        result = await requestLogicMapGeneration(selectedSkill, progressRequestId, model);
+      } catch (error) {
+        if (!shouldRefreshModelsBeforeRetry(error, model)) {
+          throw error;
+        }
+        result = await retryLogicMapWithRefreshedModels(selectedSkill, progressRequestId);
+      }
       if (requestOrdinal !== mapRequestRef.current) {
         return;
       }
@@ -1064,7 +1111,7 @@ function App() {
         setLogicMapMeta(text.rulesAnalysis);
         setEvaluationStatus(selectedSkill.modelAnalysis ? formatEvaluationStatus(selectedSkill.modelAnalysis, language, text) : text.rulesEvaluationPrompt);
         triggerStandaloneTranslation();
-        notifyError(error);
+        await promptForGitHubAuth(error);
       }
     } finally {
       if (requestOrdinal === mapRequestRef.current) {
@@ -1072,6 +1119,53 @@ function App() {
         setActiveProgressRequestId(null);
       }
     }
+  }
+
+  async function requestLogicMapGeneration(skill: SkillDetail, progressRequestId: string, selectedModel: string) {
+    return fetchJson<{ analysis: ModelAnalysis; translation?: SkillTranslation }>("/api/logic-map/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(buildLogicMapPayload(skill, selectedModel, language, progressRequestId))
+    });
+  }
+
+  async function retryLogicMapWithRefreshedModels(skill: SkillDetail, progressRequestId: string) {
+    const liveModelsResult = await loadModels(model, { live: true, showAuthGuide: false });
+    const liveModels = liveModelsResult.models || [];
+    const retryModel = liveModels.some((item) => item.id === model) ? model : "github-default";
+    if (retryModel !== model) {
+      setModel(retryModel);
+    }
+    return requestLogicMapGeneration(skill, progressRequestId, retryModel);
+  }
+
+  function shouldRefreshModelsBeforeRetry(error: unknown, selectedModel: string) {
+    if (selectedModel === "github-default") {
+      return false;
+    }
+    if (error instanceof ApiRequestError && error.payload.authRequired) {
+      return false;
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    return /model|unknown|unsupported|invalid|unavailable|not found|does not exist|not available/i.test(message);
+  }
+
+  async function promptForGitHubAuth(error: unknown) {
+    if (error instanceof ApiRequestError && error.payload.authRequired) {
+      notifyError(error);
+      return;
+    }
+    try {
+      const status = await fetchJson<GitHubStatus>("/api/auth/github/status?check=1");
+      setGitHubStatus(status);
+      if (!status.ready) {
+        showGitHubAuthGuide(status, text, refreshGitHubStatus);
+        return;
+      }
+    } catch {
+      // Fall back to the original error below.
+    }
+    notifyError(error);
   }
 
   function applyModelLogicMap(skill: SkillDetail, modelAnalysis: ModelAnalysis, metaLabel: string) {
@@ -1082,12 +1176,12 @@ function App() {
     setEvaluationStatus(formatEvaluationStatus(modelAnalysis, language, text));
   }
 
-  const complexityScore = selectedSkill?.modelAnalysis?.complexity?.score ?? (selectedSkill ? calculateComplexity(selectedSkill.analysis) : 0);
+  const complexityScore = selectedSkill?.modelAnalysis?.complexity?.score;
   const complexityMeta = selectedSkill?.modelAnalysis?.complexity?.rationale
     ? `${text.modelScore} · ${selectedSkill.modelAnalysis.complexity.rationale}`
     : selectedSkill?.modelAnalysis
       ? text.modelScore
-      : text.ruleScore;
+      : text.roiNotEvaluated;
   const roiScore = selectedSkill?.modelAnalysis?.roi?.score;
   const roiMeta = formatRoiMeta(selectedSkill?.modelAnalysis?.roi, text);
   const triggerPrompts = selectedSkill?.modelAnalysis?.activationPhrases?.length
@@ -1469,7 +1563,7 @@ function App() {
       </div>
 
       <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-        <DialogContent>
+        <DialogContent onInteractOutside={(event) => preventDialogCloseFromSelectPortal(event)}>
           <DialogHeader>
             <DialogTitle>{text.settings}</DialogTitle>
             <DialogDescription>{text.modelMeta}</DialogDescription>
@@ -1489,14 +1583,17 @@ function App() {
             </div>
             <div className="flex flex-col gap-2">
               <label className="text-sm font-medium">{text.defaultModel}</label>
-              <Select value={model} onValueChange={setModel}>
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+              <Select value={model} onValueChange={setModel} disabled={loadingSettingsModels}>
+                <SelectTrigger className="w-full">
+                  {loadingSettingsModels ? <span className="truncate text-muted-foreground">{text.loadingModels}</span> : <SelectValue />}
+                </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
                     {models.map((item) => <SelectItem key={item.id} value={item.id}>{item.name || item.id}</SelectItem>)}
                   </SelectGroup>
                 </SelectContent>
               </Select>
+              {loadingSettingsModels ? <p className="text-xs text-muted-foreground">{text.loadingModels}</p> : null}
             </div>
             <div className="flex items-center gap-3 rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
               {githubStatus?.authenticated ? (
@@ -2423,6 +2520,14 @@ function notifyError(error: unknown) {
   toast.error(error instanceof Error ? error.message : String(error));
 }
 
+function preventDialogCloseFromSelectPortal(event: Event) {
+  const target = event.target instanceof HTMLElement ? event.target : null;
+  const selectContentOpen = Boolean(document.querySelector("[data-slot='select-content'][data-state='open']"));
+  if (selectContentOpen || target?.closest("[data-slot='select-content'], [data-radix-popper-content-wrapper]")) {
+    event.preventDefault();
+  }
+}
+
 function getActiveCopy() {
   return document.documentElement.lang.toLowerCase().startsWith("zh") ? copy.zh : copy.en;
 }
@@ -2548,10 +2653,6 @@ function formatPromptDisplayText(value: string) {
     .replace(/^\s*Prompt\s*[:：]\s*/i, "")
     .replace(/\s*[·。]?\s*(场景|Scenario)\s*[:：].*$/i, "")
     .trim();
-}
-
-function calculateComplexity(analysis: SkillAnalysis) {
-  return Math.min(99, analysis.fileStats.files * 2 + analysis.tools.length * 7 + analysis.triggers.length * 3);
 }
 
 function compactSkillFiles(files: SkillFile[]) {
