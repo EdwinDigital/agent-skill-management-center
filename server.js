@@ -552,9 +552,10 @@ const progressMessages = {
     "prompt-analysis": "Analyzing trigger Prompts and typical use cases...",
     "sdk-start": "Starting GitHub Copilot SDK runtime...",
     "session-create": "Creating model session...",
-    "model-insights": "Generating insights, activation examples, ROI, and graph draft...",
-    "logic-graph": "Parsing model response and generating logic graph...",
-    "roi-evaluation": "Evaluating ROI, importance, and evidence quality...",
+    "model-scores": "Generating summary, complexity, and ROI scores...",
+    "model-insights": "Generating model insights and activation examples...",
+    "logic-graph": "Generating the model-backed logic graph...",
+    "merge-analysis": "Merging model outputs into one analysis...",
     "saving-analysis": "Saving model analysis and graph cache...",
     "translation-start": "Preparing Skill.md translation...",
     "translation-sdk-start": "Starting translation model runtime...",
@@ -576,9 +577,10 @@ const progressMessages = {
     "prompt-analysis": "正在分析触发 Prompt 与典型使用场景...",
     "sdk-start": "正在启动 GitHub Copilot SDK 运行时...",
     "session-create": "正在创建模型会话...",
-    "model-insights": "正在生成洞察、触发示例、ROI 与图谱草稿...",
-    "logic-graph": "正在解析模型响应并生成逻辑图...",
-    "roi-evaluation": "正在评估 ROI、重要度与证据质量...",
+    "model-scores": "正在生成摘要、复杂度与 ROI 评分...",
+    "model-insights": "正在生成模型洞察与触发示例...",
+    "logic-graph": "正在生成模型逻辑图...",
+    "merge-analysis": "正在合并模型输出为完整分析...",
     "saving-analysis": "正在保存模型分析与图谱缓存...",
     "translation-start": "正在准备翻译 Skill.md...",
     "translation-sdk-start": "正在启动翻译模型运行时...",
@@ -1829,24 +1831,42 @@ async function generateModelLogicMap(skill, model, language = "en", progress = {
       ...(selectedModel ? { model: selectedModel } : {})
     });
     try {
+      updateProgress(progress.requestId, "model-scores", language);
+      const scores = await sendModelJson(session, buildLogicMapScoresPrompt(skill, ruleAnalysis, language), 60_000, "Timed out while generating model scores.");
       updateProgress(progress.requestId, "model-insights", language);
-      const reply = await withTimeout(
-        session.sendAndWait({
-          prompt: buildLogicMapPrompt(skill, ruleAnalysis, language)
-        }),
-        35_000,
-        "Timed out while generating model-driven logic map."
-      );
+      const insights = await sendModelJson(session, buildLogicMapInsightsPrompt(skill, ruleAnalysis, language), 60_000, "Timed out while generating model insights and activation examples.");
       updateProgress(progress.requestId, "logic-graph", language);
-      const parsed = parseModelJson(reply?.data?.content || "");
-      updateProgress(progress.requestId, "roi-evaluation", language);
-      return normalizeModelLogicMap(parsed, ruleAnalysis, model, language);
+      const graph = await sendModelJson(session, buildLogicMapGraphPrompt(skill, ruleAnalysis, language), 75_000, "Timed out while generating model-driven logic graph.");
+      updateProgress(progress.requestId, "merge-analysis", language);
+      return normalizeModelLogicMap(mergeModelLogicMapParts(scores, insights, graph), ruleAnalysis, model, language);
     } finally {
       await disconnectCopilotSession(session);
     }
   } finally {
     await stopCopilotClient(client);
   }
+}
+
+async function sendModelJson(session, prompt, timeoutMs, message) {
+  const reply = await withTimeout(
+    session.sendAndWait({ prompt }),
+    timeoutMs,
+    message
+  );
+  return parseModelJson(reply?.data?.content || "");
+}
+
+function mergeModelLogicMapParts(scores, insights, graph) {
+  return {
+    summary: scores?.summary || graph?.summary || insights?.summary || "",
+    insight: insights?.insight || "",
+    insightSections: insights?.insightSections || insights?.insights || {},
+    complexity: scores?.complexity,
+    roi: scores?.roi,
+    activationPhrases: insights?.activationPhrases || insights?.triggers || insights?.examplePrompts,
+    nodes: graph?.nodes || graph?.graph?.nodes || [],
+    edges: graph?.edges || graph?.graph?.edges || []
+  };
 }
 
 async function generateSkillMarkdownTranslation(skill, model, language = "en", progress = {}) {
@@ -1970,6 +1990,126 @@ ${String(skill.description).slice(0, 6000)}
 
 Files:
 ${fileList}`;
+}
+
+function buildLogicMapContext(skill, ruleAnalysis) {
+  const fileList = (skill.files || []).slice(0, 120).map((file) => `- ${file.type}: ${file.path}`).join("\n");
+  const rulesGraph = JSON.stringify({
+    summary: ruleAnalysis.summary,
+    ruleComplexityScore: calculateRuleComplexity(ruleAnalysis),
+    fileStats: ruleAnalysis.fileStats,
+    sampledFiles: skill.files.length,
+    triggers: ruleAnalysis.triggers,
+    tools: ruleAnalysis.tools,
+    methods: ruleAnalysis.methods?.map((method) => method.label),
+    decisions: ruleAnalysis.decisions?.map((decision) => decision.label),
+    nodes: ruleAnalysis.graph?.nodes?.map((node) => ({ id: node.id, type: node.type, title: node.title, detail: node.detail })),
+    edges: ruleAnalysis.graph?.edges
+  }, null, 2);
+
+  return `Skill: ${skill.name}
+
+Rule analysis context:
+${rulesGraph}
+
+Full Skill.md / description:
+${String(skill.description || "")}
+
+Files:
+${fileList}`;
+}
+
+function buildLogicMapScoresPrompt(skill, ruleAnalysis, language = "en") {
+  const localeInstruction = language === "zh"
+    ? "所有 summary 和 rationale 使用中文。"
+    : "Use English for summary and rationale.";
+
+  return `You are evaluating an Agent Skill for a local visualization app.
+Return only valid JSON. Do not wrap it in markdown.
+${localeInstruction}
+
+Analyze the full Skill content below. Do not rely on a compressed summary.
+Return exactly this JSON shape:
+{
+  "summary": "one sentence skill execution summary",
+  "complexity": { "score": 0-99, "rationale": "why this Skill is simple or complex" },
+  "roi": { "score": 0-99, "manualTimeEstimate": "traditional human execution time, e.g. 45 min or 3-5 hours", "rationale": "why this saves that much effort" }
+}
+
+Complexity score must use one unified 0-99 scale: execution branches, tool orchestration, required context, artifact count, and risk/approval burden.
+ROI score must use traditional manual execution time as the main standard: higher score means the Skill replaces more manual human work.
+
+${buildLogicMapContext(skill, ruleAnalysis)}`;
+}
+
+function buildLogicMapInsightsPrompt(skill, ruleAnalysis, language = "en") {
+  const localeInstruction = language === "zh"
+    ? "所有 insightSections、activationPhrases.prompt 和 activationPhrases.useCase 使用中文。"
+    : "Use English for all insightSections, activationPhrases.prompt, and activationPhrases.useCase.";
+  const insightInstruction = language === "zh"
+    ? `insightSections 是模型洞察的核心输出，必须像资深产品/架构评审写给用户的洞察，而不是复述流程图。每个字段写 1 句短句：
+- valueScenario：这个 Skill 最适合在哪类真实任务/用户场景中使用。
+- designHighlight：它的设计巧思、抽象方式、工具路由、兜底策略或体验亮点。
+- problemSolved：它把原本哪些分散、易错、耗时或高门槛的问题变简单。
+- optimizationSpace：一个具体、可执行的后续改进方向。`
+    : `insightSections is the core model-insight output and must read like a senior product/architecture review for the user, not a replay of the graph. Write 1 concise sentence per field:
+- valueScenario: the real user task/context where this Skill is most useful.
+- designHighlight: the clever abstraction, tool routing, fallback strategy, or UX detail.
+- problemSolved: what fragmented, error-prone, slow, or high-friction work it simplifies.
+- optimizationSpace: one concrete next improvement opportunity.`;
+
+  return `You are evaluating an Agent Skill for a local visualization app.
+Return only valid JSON. Do not wrap it in markdown.
+${localeInstruction}
+
+Analyze the full Skill content below. Do not rely on a compressed summary.
+Return exactly this JSON shape:
+{
+  "insight": "single fallback paragraph if insightSections cannot be produced",
+  "insightSections": {
+    "valueScenario": "real user scenario where the Skill creates value",
+    "designHighlight": "design highlight, clever abstraction, or thoughtful interaction",
+    "problemSolved": "specific fragmented, error-prone, slow, or high-friction problem simplified",
+    "optimizationSpace": "specific future improvement or optimization opportunity"
+  },
+  "activationPhrases": [
+    { "prompt": "realistic user prompt that should trigger this Skill", "useCase": "typical scenario where this Skill is useful" },
+    { "prompt": "realistic user prompt that should trigger this Skill", "useCase": "typical scenario where this Skill is useful" },
+    { "prompt": "realistic user prompt that should trigger this Skill", "useCase": "typical scenario where this Skill is useful" }
+  ]
+}
+
+${insightInstruction}
+For activationPhrases, return exactly 3 items. If the Skill description contains WHEN/trigger hints, convert the most representative ones into full user prompts instead of copying keywords verbatim. If no trigger hints are present, infer realistic prompts and scenarios from the Skill description and files.
+
+${buildLogicMapContext(skill, ruleAnalysis)}`;
+}
+
+function buildLogicMapGraphPrompt(skill, ruleAnalysis, language = "en") {
+  const localeInstruction = language === "zh"
+    ? "所有 title、detail、label 和 evidence 使用中文；文件名、命令、产品名和专有名词保持原样。"
+    : "Use English for title, detail, label, and evidence; preserve file names, commands, product names, and proper nouns.";
+
+  return `You are generating an Agent Skill execution graph for a local visualization app.
+Return only valid JSON. Do not wrap it in markdown.
+${localeInstruction}
+
+Analyze the full Skill content below. Do not rely on a compressed summary.
+Return exactly this JSON shape:
+{
+  "nodes": [
+    { "id": "stable-kebab-id", "type": "input|decision|document|filesystem|method|tool|output", "title": "short title", "detail": "short operational detail", "evidence": ["source phrase or file"] }
+  ],
+  "edges": [
+    { "source": "node id", "target": "node id", "label": "short transition label" }
+  ]
+}
+
+Create 6 to 14 nodes. Keep node detail under 140 characters. Use evidence from the description or file list.
+The graph must start with an input node and end with an output node.
+Represent the actual execution path accurately: triggers, required context, decisions, tools, browser/file/system interactions, user review points, and final outputs.
+
+${buildLogicMapContext(skill, ruleAnalysis)}`;
 }
 
 function buildLogicMapPrompt(skill, ruleAnalysis, language = "en") {
