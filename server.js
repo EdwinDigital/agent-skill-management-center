@@ -12,7 +12,8 @@ const app = express();
 const execFileAsync = promisify(execFile);
 const port = Number(process.env.PORT || 4173);
 const defaultSkillRoot = process.env.SKILL_ROOT || path.join(os.homedir(), ".agents", "skills");
-const databasePath = process.env.SKILL_ANALYSIS_DB || path.join(os.homedir(), ".skill-logic-visualizer", "analysis.sqlite");
+const defaultDatabasePath = "data/analysis.sqlite";
+const databasePath = resolveProjectPath(process.env.SKILL_ANALYSIS_DB || defaultDatabasePath);
 const analysisSchemaVersion = "logic-map-value-insight-sections-v3";
 const fallbackModels = [
   { id: "github-default", name: "GitHub default", source: "fallback" }
@@ -1003,6 +1004,11 @@ function normalizeScanPath(value, sourceType) {
 function expandHomePath(value) {
   const text = String(value || "");
   return text.startsWith("~/") ? path.join(os.homedir(), text.slice(2)) : text;
+}
+
+function resolveProjectPath(value) {
+  const expanded = expandHomePath(value);
+  return path.isAbsolute(expanded) ? expanded : path.resolve(process.cwd(), expanded);
 }
 
 function directoryExists(value) {

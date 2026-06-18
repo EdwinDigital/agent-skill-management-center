@@ -33,6 +33,7 @@ import {
   Trash2,
   WandSparkles,
   Wrench,
+  X,
   ZoomIn,
   ZoomOut,
   type LucideIcon
@@ -289,6 +290,7 @@ const copy = {
     readingRoot: "Reading skill root...",
     skills: "Skills list",
     searchByName: "Search by name",
+    clearSearch: "Clear search",
     previous: "Previous",
     next: "Next",
     heroEyebrow: "Execution cartography",
@@ -408,6 +410,7 @@ const copy = {
     readingRoot: "正在读取 Skill 根目录...",
     skills: "Skills列表",
     searchByName: "按名称搜索",
+    clearSearch: "清除搜索",
     previous: "上一页",
     next: "下一页",
     heroEyebrow: "执行地图",
@@ -1047,9 +1050,11 @@ function App() {
       if (result.translation?.content && !result.translation.skipped) {
         setSkillTranslation(result.translation);
         setSkillDocMode("translated");
+        setTranslatingSkillDoc(false);
       } else if (result.translation?.skipped) {
         setSkillTranslation(null);
         setSkillDocMode("original");
+        setTranslatingSkillDoc(false);
       } else {
         triggerStandaloneTranslation();
       }
@@ -1235,7 +1240,20 @@ function App() {
 
               <div className="relative">
                 <Search className="pointer-events-none absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
-                <Input value={skillSearch} onChange={(event) => setSkillSearch(event.target.value)} placeholder={text.searchByName} className="pl-8" />
+                <Input value={skillSearch} onChange={(event) => setSkillSearch(event.target.value)} placeholder={text.searchByName} className="pl-8 pr-9" />
+                {skillSearch ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    onClick={() => setSkillSearch("")}
+                    aria-label={text.clearSearch}
+                    title={text.clearSearch}
+                  >
+                    <X data-icon="inline-start" />
+                  </Button>
+                ) : null}
               </div>
 
               <div ref={skillListRef} className="flex flex-col gap-2" role="listbox" aria-label="Available skills">
