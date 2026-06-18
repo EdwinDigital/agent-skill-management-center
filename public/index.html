@@ -3,12 +3,12 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Skill Logic Visualizer</title>
+    <title>AI Agent Skills Console</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/styles.css" />
@@ -16,18 +16,18 @@
   <body>
     <header class="top-nav">
       <div class="nav-brand">
-        <div class="brand-mark" aria-hidden="true">S</div>
+        <div class="brand-mark" aria-hidden="true">SL</div>
         <div>
           <p class="eyebrow">Skill OS</p>
-          <h1>Logic Visualizer</h1>
+          <h1>AI Agent Skills Console</h1>
         </div>
       </div>
       <div class="nav-actions">
-        <button id="themeToggle" class="theme-toggle" type="button" aria-label="Switch to dark theme" title="Switch theme">
-          <span class="theme-icon sun" aria-hidden="true">☀</span>
-          <span class="theme-icon moon" aria-hidden="true">☾</span>
+        <button id="themeToggle" class="icon-action theme-toggle" type="button" aria-label="Switch to dark theme" title="Switch theme">
+          <span class="theme-icon sun" aria-hidden="true">☼</span>
+          <span class="theme-icon moon" aria-hidden="true">◐</span>
         </button>
-        <button id="openSettings" class="settings-button" type="button" aria-label="Settings" title="Settings">
+        <button id="openSettings" class="icon-action settings-button" type="button" aria-label="Settings" title="Settings">
           <span class="settings-icon" aria-hidden="true">⚙</span>
         </button>
         <button id="githubLogin" class="nav-button ghost" type="button">Sign in with GitHub</button>
@@ -36,8 +36,11 @@
 
     <div class="shell">
       <aside class="sidebar" aria-label="Skill list">
-        <div class="path-card">
-          <label for="skillRootSelect">Skill directory</label>
+        <div class="path-card surface-card">
+          <div class="section-heading compact">
+            <label for="skillRootSelect">Skill directory</label>
+            <span id="skillCount" class="count-badge">0</span>
+          </div>
           <div class="path-row">
             <select id="skillRootSelect"></select>
             <button id="deletePath" class="danger-button" type="button">Delete</button>
@@ -51,9 +54,9 @@
 
         <div class="list-header">
           <span>Skills</span>
-          <strong id="skillCount">0</strong>
         </div>
         <label class="skill-search" for="skillSearch">
+          <span class="sr-only">Search skills</span>
           <input id="skillSearch" type="search" autocomplete="off" placeholder="Search by name" />
         </label>
         <div id="skillList" class="skill-list" role="listbox" aria-label="Available skills"></div>
@@ -66,12 +69,10 @@
 
       <main class="workspace">
         <section id="introHero" class="hero flow-hero">
-          <div>
+          <div class="hero-copy">
             <p class="eyebrow">Execution cartography for agent skills</p>
             <h2>Map the skill like an agent flow.</h2>
-            <p>
-              Pan across decisions, run methods, tools, and outputs. Click any node to inspect the exact evidence behind it.
-            </p>
+            <p>Read a Skill folder as an execution system: triggers, tools, files, run methods, model insight, and the decisions that connect them.</p>
           </div>
           <div class="flow-legend" aria-label="Graph legend">
             <span><i class="legend-dot input"></i>Input</span>
@@ -81,20 +82,21 @@
           </div>
         </section>
 
-        <section id="emptyState" class="empty-state">
+        <section id="emptyState" class="empty-state surface-card">
+          <div class="empty-icon" aria-hidden="true">⌘</div>
           <p class="eyebrow">No skill selected</p>
-          <h3>Select a skill from the sidebar.</h3>
-          <p>The app reads a Skill directory, extracts activation phrases, run methods, tool usage, file structure, and model-driven insight, then turns that logic into an interactive horizontal map.</p>
+          <h3>Select a skill from the sidebar to begin.</h3>
+          <p>Use this app to audit how a Skill activates, what tools it relies on, which files support it, and how its execution path flows from intent to output.</p>
           <div class="empty-guide">
             <span>1. Choose a Skill directory from the sidebar.</span>
-            <span>2. Select a Skill name to analyze its files and description.</span>
+            <span>2. Select a Skill name to read its files and description.</span>
             <span>3. Click graph nodes to inspect decisions, tools, evidence, and outputs.</span>
           </div>
         </section>
 
         <section id="detail" class="detail hidden" aria-live="polite">
           <div class="detail-top">
-            <div>
+            <div class="skill-overview surface-card">
               <p id="skillPath" class="eyebrow"></p>
               <h3 id="skillName"></h3>
               <p id="skillSummary"></p>
@@ -103,12 +105,12 @@
                 <small id="evaluationStatus">Current score is rules-based. Use AI evaluation for full assessment.</small>
               </div>
             </div>
-            <div class="score-card">
+            <div class="score-card surface-card">
               <span>Complexity</span>
               <strong id="complexityScore">0</strong>
               <small id="complexityMeta">Rules score</small>
             </div>
-            <div class="score-card roi-card">
+            <div class="score-card roi-card surface-card">
               <span>ROI</span>
               <strong id="roiScore">—</strong>
               <small id="roiMeta">Not evaluated</small>
@@ -116,25 +118,29 @@
           </div>
 
           <div class="top-insight-grid">
-            <article class="model-card">
+            <article class="model-card surface-card">
               <div class="card-title">
-                <span id="modelInsightTitle">Model insight</span>
-                <small id="modelInsightMeta">GitHub Copilot SDK</small>
+                <div>
+                  <span id="modelInsightTitle">Model insight</span>
+                  <small id="modelInsightMeta">GitHub Copilot SDK</small>
+                </div>
               </div>
               <div id="modelInsight" class="model-insight">Select a skill to request model-driven analysis.</div>
             </article>
 
-            <article class="trigger-card">
+            <article class="trigger-card surface-card">
               <div class="card-title">
-                <span>Trigger prompts</span>
-                <small>Prompts and typical scenarios that activate this skill</small>
+                <div>
+                  <span>Trigger prompts</span>
+                  <small>Prompts and typical scenarios that activate this skill</small>
+                </div>
               </div>
               <div id="triggerList" class="phrase-list"></div>
             </article>
           </div>
 
           <div class="flow-layout">
-            <article class="map-card flow-card">
+            <article class="map-card flow-card surface-card">
               <div class="card-title">
                 <div class="card-heading">
                   <span id="logicMapTitle">Logic map</span>
@@ -153,10 +159,12 @@
               </div>
             </article>
 
-            <aside class="node-inspector">
+            <aside class="node-inspector surface-card">
               <div class="card-title">
-                <span id="nodeDetailTitle">Node detail</span>
-                <small id="nodeDetailType">Select a node</small>
+                <div>
+                  <span id="nodeDetailTitle">Node detail</span>
+                  <small id="nodeDetailType">Select a node</small>
+                </div>
               </div>
               <p id="nodeDetailBody">Click a graph node to inspect its role, evidence, and downstream execution path.</p>
               <div id="nodeEvidence" class="node-evidence"></div>
@@ -164,35 +172,43 @@
           </div>
 
           <div class="evidence-grid">
-            <article class="tool-card">
+            <article class="tool-card surface-card">
               <div class="card-title">
-                <span>Tool stack</span>
-                <small>Detected execution surfaces</small>
+                <div>
+                  <span>Tool stack</span>
+                  <small>Detected execution surfaces</small>
+                </div>
               </div>
               <div id="toolStack" class="chip-grid"></div>
             </article>
 
-            <article class="method-card">
+            <article class="method-card surface-card">
               <div class="card-title">
-                <span id="methodTitle">Run methods</span>
-                <small id="methodMeta">Commands and procedural steps</small>
+                <div>
+                  <span id="methodTitle">Run methods</span>
+                  <small id="methodMeta">Commands and procedural steps</small>
+                </div>
               </div>
               <div id="methodList" class="method-list"></div>
             </article>
 
-            <article class="file-card">
+            <article class="file-card surface-card">
               <div class="card-title">
-                <span>Directory telemetry</span>
-                <small id="fileStats"></small>
+                <div>
+                  <span>Directory telemetry</span>
+                  <small id="fileStats"></small>
+                </div>
               </div>
               <div id="fileTree" class="file-tree"></div>
             </article>
           </div>
 
-          <article class="description-card">
+          <article class="description-card surface-card">
             <div class="card-title">
-              <span id="descriptionTitle">Description</span>
-              <small>Raw source</small>
+              <div>
+                <span id="descriptionTitle">Description</span>
+                <small>Raw source</small>
+              </div>
             </div>
             <pre id="descriptionText"></pre>
           </article>
@@ -201,7 +217,7 @@
     </div>
 
     <div id="settingsPanel" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
-      <div class="modal-card">
+      <div class="modal-card surface-card">
         <div class="modal-top">
           <div>
             <p class="eyebrow">Control plane</p>
@@ -233,7 +249,7 @@
     </div>
 
     <div id="directoryConfirmPanel" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="directoryConfirmTitle">
-      <div class="modal-card">
+      <div class="modal-card surface-card">
         <div class="modal-top">
           <div>
             <p class="eyebrow" id="directoryConfirmEyebrow">Local Skill root</p>

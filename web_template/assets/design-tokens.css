@@ -1,0 +1,101 @@
+:root {
+  --bg: #eef3fa;
+  --panel: #ffffff;
+  --panel-strong: #f7faff;
+  --line: #e3eaf5;
+  --text: #172033;
+  --muted: #667085;
+  --growth: #ff174f;
+  --decline: #16a34a;
+  --up: #ff174f;
+  --down: #16a34a;
+  --flat: #667085;
+  --accent: #0078d4;
+  --chart-a: #0078d4;
+  --chart-b: #45a0de;
+  --chart-c: #c03bc4;
+  --hero: linear-gradient(120deg, #0a4d8c 0%, #0078d4 52%, #c03bc4 126%);
+  --side: linear-gradient(180deg, #ffffff, #f4f8ff 58%, #eaf3ff);
+  --side-text: #172033;
+  --side-muted: #526274;
+  --side-control-bg: #ffffff;
+  --side-control-border: #cbd8e8;
+  --side-divider: rgba(21, 36, 56, 0.12);
+  --shadow: 0 10px 24px rgba(16, 24, 40, 0.08);
+  --app-header-height: 54px;
+  --sidebar-width: 340px;
+  --sidebar-collapsed-width: 42px;
+  --assistant-width: clamp(300px, 24vw, 390px);
+  --assistant-rail-width: 42px;
+}
+
+body.theme-dark {
+  --bg: #0e1320;
+  --panel: #171e2b;
+  --panel-strong: #202a3a;
+  --line: #28313f;
+  --text: #eef2f8;
+  --muted: #9aa6b6;
+  --decline: #00ffd5;
+  --down: #00ffd5;
+  --flat: #9aa6b6;
+  --shadow: 0 14px 34px rgba(0, 0, 0, 0.28);
+  --side: linear-gradient(180deg, #081a35, #0a4d8c 58%, #12314e);
+  --side-text: #ffffff;
+  --side-muted: rgba(255, 255, 255, 0.7);
+  --side-control-bg: rgba(255, 255, 255, 0.12);
+  --side-control-border: rgba(255, 255, 255, 0.24);
+  --side-divider: rgba(255, 255, 255, 0.18);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--text);
+  background: var(--bg);
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+  line-height: 1.45;
+  letter-spacing: 0;
+}
+
+button,
+select,
+input,
+textarea {
+  font: inherit;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr) var(--assistant-width);
+  min-height: 100vh;
+  padding-top: var(--app-header-height);
+  transition: grid-template-columns 180ms ease;
+}
+
+body.sidebar-collapsed .app-shell {
+  grid-template-columns: var(--sidebar-collapsed-width) minmax(0, 1fr) var(--assistant-width);
+}
+
+body.assistant-collapsed .app-shell {
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr) var(--assistant-rail-width);
+}
+
+body.sidebar-collapsed.assistant-collapsed .app-shell {
+  grid-template-columns: var(--sidebar-collapsed-width) minmax(0, 1fr) var(--assistant-rail-width);
+}
+
+.main {
+  min-width: 0;
+  padding: 18px clamp(14px, 1.6vw, 28px) 32px;
+}
+
+.grid {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}

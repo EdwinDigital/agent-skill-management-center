@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Web 应用模板</title>
+  <link rel="stylesheet" href="../assets/design-tokens.css">
+  <link rel="stylesheet" href="../assets/components.css">
+</head>
+<body class="theme-dark assistant-collapsed">
+  <header class="app-header">
+    <div class="app-title-block">
+      <div class="app-mark" aria-hidden="true">▦</div>
+      <div>
+        <div class="app-kicker">WORKSTATION</div>
+        <h1>Web 应用模板</h1>
+      </div>
+    </div>
+    <div class="app-actions">
+      <button id="theme-toggle" class="icon-button" type="button" aria-label="切换主题">☾</button>
+    </div>
+  </header>
+
+  <div class="app-shell">
+    <aside class="sidebar">
+      <button id="sidebar-toggle" class="sidebar-toggle" type="button" aria-label="折叠侧边栏" aria-expanded="true">‹</button>
+      <div class="rail-hint left" aria-hidden="true">数据管理</div>
+      <section class="card" style="padding: 16px;">
+        <strong>数据管理</strong>
+        <p style="color: var(--side-muted); margin-bottom: 0;">放置版本、搜索、筛选和上传控件。</p>
+      </section>
+    </aside>
+
+    <main class="main">
+      <div class="customer-name-row">
+        <h2 style="margin: 0;">客户或工作区名称</h2>
+        <button id="privacy-toggle" class="privacy-toggle" type="button" aria-pressed="false" aria-label="隐私模式">◉</button>
+      </div>
+      <p style="color: var(--muted); margin-top: 4px;">TPID <span data-sensitive="82281336">82281336</span> · <span data-sensitive="118">118</span> 行明细</p>
+
+      <section class="hero-summary">
+        <div>
+          <div class="eyebrow">Overview</div>
+          <h1>业务摘要区域</h1>
+          <div class="chips">
+            <span class="chip">AE: Demo</span>
+            <span class="chip">ATS: Demo</span>
+          </div>
+        </div>
+        <div class="hero-stats">
+          <div class="hero-stat"><div class="hero-label">订阅数</div><div class="hero-value" data-sensitive="48">48</div></div>
+          <div class="hero-stat"><div class="hero-label">当前范围</div><div class="hero-value" data-money="7460000">$7.46M</div></div>
+        </div>
+      </section>
+
+      <section class="grid kpi-grid">
+        <div class="card kpi"><div class="kpi-label">当月预测量</div><div class="kpi-value" data-money="7460000">$7.46M</div></div>
+        <div class="card kpi"><div class="kpi-label">MoM</div><div class="kpi-value up" data-pct="0.294">+29.4%</div></div>
+        <div class="card kpi"><div class="kpi-label">Top 服务</div><div class="kpi-value" data-pct="0.42">42%</div></div>
+      </section>
+
+      <section class="card" style="padding: 18px;">
+        <div class="barrow">
+          <div class="barname" title="AZURE-HK-HKTEAM-SHINY-PRD">AZURE-HK-HKTEAM-SHINY-PRD</div>
+          <div class="track"><div class="fill" style="width: 80%;"></div></div>
+          <div class="num" data-money="5400000">$5.40M</div>
+          <div class="delta up" data-pct="0.285">+28.5%</div>
+        </div>
+      </section>
+    </main>
+
+    <aside class="assistant-sidebar">
+      <button id="assistant-toggle" class="assistant-toggle" type="button" aria-label="折叠助手栏" aria-expanded="false">›</button>
+      <div class="rail-hint right" aria-hidden="true">智能洞察</div>
+      <section class="card" style="padding: 16px;">
+        <strong>智能洞察</strong>
+        <p style="color: var(--side-muted);">放置 Copilot / Agent 对话区域。</p>
+      </section>
+    </aside>
+  </div>
+
+  <script src="../assets/template.js"></script>
+</body>
+</html>
