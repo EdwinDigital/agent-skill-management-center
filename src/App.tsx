@@ -1267,8 +1267,7 @@ function App() {
               <div className="sidebar-actions-block">
                 <button type="button" className="sidebar-primary-action" onClick={scanDefaultDirectories} disabled={loadingRoot}>
                   <span className="sidebar-primary-icon"><ScanSearch className="size-4" aria-hidden="true" /></span>
-                  <span className="min-w-0 flex-1 truncate">{text.sidebarNewTask}</span>
-                  <ChevronRight className="size-3.5" aria-hidden="true" />
+                  <span className="min-w-0 truncate">{text.sidebarNewTask}</span>
                 </button>
 
                 <div className="sidebar-nav-list" aria-label="Skill console navigation">
