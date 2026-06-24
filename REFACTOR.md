@@ -1,0 +1,664 @@
+# Refactor Plan for Tauri Desktop Readiness
+
+## 目标
+
+本项目当前是本地优先的 AI Agent Skills Console：React/Vite 前端、Express/Node API、`node:sqlite` 本地数据库，并通过 GitHub Copilot SDK 做模型分析与翻译。未来目标是将它改造成可以用 Tauri 封装和发布的桌面应用，支持 macOS 和 Windows。
+
+最终形态应该满足：
+
+- 前端继续使用 React + Vite，作为 Tauri WebView UI。
+- 核心业务逻辑从 Express HTTP 层中剥离，成为可被多种运行时复用的 core modules。
+- 短期仍可用 `npm start` 作为本地 Web 控制台运行。
+- 中期可用 Tauri + Node sidecar 快速打包桌面版。
+- 长期逐步迁移高价值本地能力到 Rust/Tauri commands，减少对本地 HTTP server 的依赖。
+- macOS 与 Windows 发布流程可复现，包括签名、公证、安装包和自动更新的预留设计。
+
+## Tauri 相关判断
+
+Tauri 的基本模型是：
+
+- UI 使用任何能编译为 HTML/CSS/JS 的前端框架。
+- 桌面窗口使用系统 WebView。
+- 后端能力优先由 Rust binary 暴露 command/API 给前端调用。
+- Tauri 不要求通过 localhost HTTP server 提供 UI，官方能力包含 native WebView protocol。
+- 可以使用 sidecar 运行额外可执行文件，但 sidecar 更适合作为迁移阶段或不可迁移能力的兼容层。
+
+因此，本项目不应该为了“桌面化”先引入更重的 Express 框架。真正重要的是把 `server.js` 中的业务逻辑、数据访问、系统能力和 HTTP adapter 解耦。
+
+## 当前问题
+
+当前 `server.js` 集中了过多职责：
+
+- Express app 初始化和中间件。
+- API route 注册。
+- 请求参数解析和错误响应。
+- SQLite 查询和缓存写入。
+- Skill root 扫描、索引、读取。
+- 规则分析和逻辑图生成。
+- GitHub CLI 授权检查。
+- GitHub Copilot SDK 客户端、session、模型列表、分析和翻译调用。
+- prompt 拼装和模型 JSON 解析。
+- 进度状态存储和本地化消息。
+
+这会带来几个问题：
+
+- Express route 很难复用到 Tauri command。
+- 数据访问和业务逻辑耦合，无法独立测试。
+- Copilot SDK 生命周期逻辑分散在多个 route 中。
+- 将来迁移 Rust/Tauri 时，不清楚哪些能力应该迁、哪些应该作为 sidecar 保留。
+- 文件超过 2400 行，局部修改容易影响无关功能。
+
+## 总体改造原则
+
+1. 先拆边界，不换运行时。
+2. 保持现有 API 行为不变，避免一次性重写。
+3. 让 core modules 不依赖 Express 的 `request` 和 `response`。
+4. 将数据库访问集中到 repository 层。
+5. 将本地系统能力抽象为 adapter，方便未来换成 Tauri command。
+6. 将 Copilot SDK 封装为独立 provider，避免 route 直接管理 session 生命周期。
+7. 所有阶段都必须能通过 `npm run check` 和至少一次关键 API/browser 验证。
+8. 不提交 `data/`、`public/dist/`、`node_modules/` 或本地运行产物。
+
+## 推荐目标目录结构
+
+```text
+server.js
+server/
+  app.js
+  config.js
+  routes/
+    config.routes.js
+    progress.routes.js
+    skill-roots.routes.js
+    skills.routes.js
+    github-auth.routes.js
+    models.routes.js
+    analysis.routes.js
+    translation.routes.js
+    error-logs.routes.js
+  middleware/
+    error-handler.js
+    request-size-handler.js
+  adapters/
+    express-response.js
+core/
+  constants.js
+  services/
+    progress.service.js
+    skill-root.service.js
+    skill-index.service.js
+    skill-reader.service.js
+    rule-analysis.service.js
+    graph-layout.service.js
+    analysis-cache.service.js
+    translation-cache.service.js
+    copilot.service.js
+    github-auth.service.js
+    model-analysis.service.js
+    markdown-translation.service.js
+  repositories/
+    skill-root.repository.js
+    skill-index.repository.js
+    analysis.repository.js
+    translation.repository.js
+    error-log.repository.js
+  prompts/
+    logic-map.prompts.js
+    translation.prompts.js
+  utils/
+    errors.js
+    hash.js
+    json.js
+    language.js
+    localization.js
+    paths.js
+    filesystem.js
+desktop/
+  tauri-contract.md
+  commands/
+    skills.contract.md
+    analysis.contract.md
+    settings.contract.md
+```
+
+说明：
+
+- `server/` 是当前 Web/HTTP 适配层。
+- `core/` 是可被 Express、Tauri sidecar、测试脚本和未来 Rust command 迁移参考复用的业务层。
+- `desktop/` 存放 Tauri 适配规划和 command contract，不立即引入 Tauri 依赖也能先定义边界。
+
+## 分层设计
+
+### 1. Route 层
+
+Route 层只负责：
+
+- 读取 `request.query`、`request.params`、`request.body`。
+- 调用 service。
+- 返回 JSON。
+- 把异常交给统一错误处理。
+
+不要在 route 中写：
+
+- SQL。
+- 文件系统递归。
+- Copilot SDK session 管理。
+- prompt 拼接。
+- 复杂业务判断。
+
+示例目标：
+
+```js
+router.get('/api/skills', asyncHandler(async (request, response) => {
+  const root = resolveRequestedRoot(request.query.root);
+  const language = normalizeLanguage(request.query.language);
+  const skills = await skillReaderService.listSkills({ root, language });
+  response.json({ root, skills });
+}));
+```
+
+### 2. Service 层
+
+Service 层负责业务用例：
+
+- list skill roots。
+- scan default roots。
+- inspect local skill root。
+- list skills。
+- read skill details。
+- generate rule analysis。
+- generate model-backed logic map。
+- generate markdown translation。
+- cache lookup and save。
+
+Service 输入输出应该是普通 JSON-like object，不依赖 Express。
+
+### 3. Repository 层
+
+Repository 层负责 SQLite 读写：
+
+- `skill_directory_scan`
+- `skill_directory_index`
+- `skill_model_analyses`
+- `skill_markdown_translations`
+- `app_error_logs`
+
+注意：当前运行时的 `node:sqlite` `DatabaseSync` 没有 `.transaction()` helper，多步写入继续使用显式：
+
+```js
+BEGIN IMMEDIATE
+COMMIT
+ROLLBACK
+```
+
+### 4. Provider/Adapter 层
+
+需要抽象以下能力：
+
+- filesystem provider：读取目录、文件、检查存在性、路径规范化。
+- picker provider：macOS 现在用 `osascript`，Tauri 后可用 dialog plugin/command。
+- auth provider：当前用 GitHub CLI 与环境变量，未来桌面端可能需要更明确的登录引导和凭据存储策略。
+- model provider：当前是 GitHub Copilot SDK，未来可能仍由 Node sidecar 承担，也可能接入其它 provider。
+- database provider：短期 `node:sqlite`，长期可考虑 Rust `rusqlite` 或 Tauri SQL plugin。
+
+## Tauri 适配路线
+
+### 路线 A：Node sidecar 快速桌面版
+
+这是最快可发布桌面 beta 的路线。
+
+架构：
+
+```text
+Tauri WebView UI
+  -> HTTP localhost
+    -> Node sidecar Express server
+      -> core services
+      -> node:sqlite
+      -> filesystem
+      -> GitHub Copilot SDK
+```
+
+优点：
+
+- 对现有代码改动最小。
+- Express API 可以继续使用。
+- Copilot SDK 兼容性风险较低。
+- 可以较快产出 macOS/Windows 桌面应用。
+
+缺点：
+
+- 桌面包体更大，需要打包 Node runtime 或可执行 sidecar。
+- 要管理 sidecar 端口、生命周期、崩溃重启。
+- localhost API 需要做好只绑定 `127.0.0.1` 和随机端口/握手 token，避免本机其它进程误访问。
+- 安全模型不如纯 Tauri command。
+
+适合阶段：
+
+- 第一版 desktop preview。
+- 保留 Copilot SDK Node 能力。
+- 快速验证桌面 UX、安装包、自动更新流程。
+
+### 路线 B：Tauri Rust commands 长期版
+
+长期目标是把本地系统能力迁到 Rust command。
+
+架构：
+
+```text
+Tauri WebView UI
+  -> invoke(command)
+    -> Rust command layer
+      -> Rust services/repositories
+      -> SQLite
+      -> filesystem/dialog/shell APIs
+  -> optional Node sidecar only for Copilot SDK provider
+```
+
+优点：
+
+- 更符合 Tauri 安全与小体积目标。
+- 不需要常驻 localhost server。
+- 文件系统、SQLite、系统对话框等能力更自然。
+- macOS/Windows 打包体验更统一。
+
+缺点：
+
+- 需要把大量 JS 业务逻辑迁移或重写为 Rust。
+- Copilot SDK 如果只能在 Node 环境稳定运行，仍需要 sidecar 或远程 provider。
+- 迁移成本高，不适合一开始就做。
+
+适合阶段：
+
+- 桌面版功能稳定后。
+- 逐步迁移 Skill 扫描、索引、SQLite、配置管理。
+- 保留模型 provider 作为独立可替换模块。
+
+## 桌面发布目标
+
+### macOS
+
+需要考虑：
+
+- `.app` bundle。
+- `.dmg` 安装包。
+- Apple Developer ID 签名。
+- notarization 公证。
+- Gatekeeper 兼容。
+- 后续自动更新签名。
+- 文件访问权限和用户选择目录权限。
+
+### Windows
+
+需要考虑：
+
+- `.msi` 或 `.exe` 安装包。
+- 代码签名证书。
+- WebView2 runtime 依赖。
+- 用户数据目录位置。
+- 防火墙/本地端口策略，如果使用 Node sidecar。
+- 自动更新签名。
+
+### 用户数据目录
+
+当前数据库默认在项目相对路径：
+
+```text
+data/analysis.sqlite
+```
+
+桌面版不应继续使用项目目录作为默认数据位置。应迁移为平台应用数据目录：
+
+- macOS：`~/Library/Application Support/<AppName>/analysis.sqlite`
+- Windows：`%APPDATA%/<AppName>/analysis.sqlite` 或 Tauri app data dir
+- Linux：`~/.local/share/<AppName>/analysis.sqlite`
+
+迁移策略：
+
+- Web/dev 模式保留 `data/analysis.sqlite`。
+- Desktop 模式使用 Tauri app data dir。
+- 启动时检测旧数据库并提供迁移/复制。
+- 不在 UI 中暴露绝对内部路径，除非用于调试。
+
+## 分阶段实施计划
+
+### Phase 0：现状稳定与安全网
+
+目标：在拆分前建立基本安全网。
+
+任务：
+
+- 保持现有 API 行为不变。
+- 整理关键验证命令：`npm run check`、`npm run build`、浏览器核心流程。
+- 记录关键 API：
+  - `/api/config`
+  - `/api/skill-roots`
+  - `/api/skills`
+  - `/api/skills/:name`
+  - `/api/logic-map/cache`
+  - `/api/logic-map/generate`
+  - `/api/skill-translation/cache`
+  - `/api/skill-translation/generate`
+  - `/api/error-logs`
+- 保留现有 `server.js` 作为行为参考。
+
+验收：
+
+- 无功能改动。
+- `npm run check` 通过。
+
+### Phase 1：Express route 拆分
+
+目标：把 HTTP route 从 `server.js` 中拆出。
+
+任务：
+
+- 创建 `server/app.js` 负责 Express app 创建、中间件、静态资源和 route 挂载。
+- 创建 `server/routes/*.routes.js`。
+- 创建 `server/middleware/error-handler.js`。
+- `server.js` 变成启动入口：加载 config、创建 app、listen。
+
+注意：
+
+- 不先改业务逻辑。
+- route 可以暂时从 service barrel 导入原函数。
+- 每拆一个路由文件都跑 `npm run check`。
+
+验收：
+
+- 所有 API 路径保持不变。
+- `npm run check` 通过。
+- `npm start` 可正常启动。
+
+### Phase 2：Core service 拆分
+
+目标：把业务逻辑从 route 和 `server.js` 中拆出。
+
+优先顺序：
+
+1. `progress.service.js`
+2. `language/localization` utils
+3. `paths/filesystem` utils
+4. `skill-root.service.js`
+5. `skill-index.service.js`
+6. `skill-reader.service.js`
+7. `rule-analysis.service.js`
+8. `graph-layout.service.js`
+9. `github-auth.service.js`
+10. `copilot.service.js`
+11. `model-analysis.service.js`
+12. `markdown-translation.service.js`
+
+验收：
+
+- service 函数不接收 Express request/response。
+- route 层只做参数组装和响应。
+- `server.js` 明显缩小。
+
+### Phase 3：Repository 拆分
+
+目标：集中 SQLite 访问。
+
+任务：
+
+- `skill-root.repository.js`
+- `skill-index.repository.js`
+- `analysis.repository.js`
+- `translation.repository.js`
+- `error-log.repository.js`
+
+约定：
+
+- repository 接收 `database` 实例或通过 context 注入。
+- repository 不做 UI 文案本地化。
+- transaction 显式 `BEGIN IMMEDIATE` / `COMMIT` / `ROLLBACK`。
+
+验收：
+
+- SQL 不再散落在 route/service 之外。
+- 缓存读写逻辑可独立测试或脚本调用。
+
+### Phase 4：Runtime adapter 抽象
+
+目标：为 Tauri 做准备。
+
+新增概念：
+
+```js
+const runtime = {
+  mode: 'web' | 'desktop-sidecar' | 'tauri',
+  filesystem,
+  database,
+  picker,
+  auth,
+  modelProvider,
+  appDataDir
+};
+```
+
+任务：
+
+- 抽象 `filesystem`：stat/read/readdir/exists。
+- 抽象 `picker`：当前 macOS `osascript`，未来 Tauri dialog。
+- 抽象 `databasePath`：Web/dev 与 desktop app data dir 分开。
+- 抽象 `modelProvider`：Copilot SDK 不直接散落在业务服务。
+
+验收：
+
+- core service 可接收 runtime context。
+- 不依赖 process.cwd() 作为唯一数据根。
+
+### Phase 5：Tauri sidecar 预览版
+
+目标：先发布一个可用的桌面 preview。
+
+任务：
+
+- 添加 `src-tauri/`。
+- 让 Vite build 作为 Tauri frontendDist。
+- 将 Node server 打成 sidecar 或随应用启动。
+- Tauri 主进程负责：
+  - 启动 sidecar。
+  - 分配/读取 localhost 端口。
+  - 向前端注入 API base URL。
+  - 应用退出时关闭 sidecar。
+- Express server 只绑定 `127.0.0.1`。
+- 增加本地握手 token，前端请求带 token header。
+
+验收：
+
+- macOS 可打开 `.app`。
+- Windows 可打开安装包或开发版。
+- Skill 扫描、逻辑图、缓存、翻译核心流程可用。
+
+### Phase 6：Tauri command 迁移
+
+目标：逐步减少 Node sidecar 依赖。
+
+优先迁移：
+
+1. app config。
+2. app data dir。
+3. folder picker。
+4. filesystem scan/read。
+5. SQLite repository。
+6. progress store。
+7. error logs。
+
+暂缓迁移：
+
+- GitHub Copilot SDK model provider。
+- 复杂 prompt orchestration。
+- 需要 Node ecosystem 的能力。
+
+验收：
+
+- sidecar 缩小为 model provider，或完全移除。
+- 前端 API 调用可通过 adapter 切换 HTTP 与 Tauri invoke。
+
+## 前端适配建议
+
+当前前端直接通过 `/api/...` 调用后端。为了适配 Tauri，应引入 API client 层：
+
+```text
+src/lib/api/
+  client.ts
+  http-client.ts
+  tauri-client.ts
+  contracts.ts
+```
+
+目标：
+
+- UI 不直接写 fetch URL。
+- Web 模式用 HTTP client。
+- Tauri 模式可用 invoke client。
+- 类型和 payload contract 在一处维护。
+
+示例：
+
+```ts
+const api = createApiClient(runtimeMode);
+await api.skills.list({ root, language });
+await api.logicMap.generate({ skill, model, language, requestId });
+```
+
+## 安全设计
+
+桌面版尤其要注意：
+
+- 如果使用 localhost sidecar，只绑定 `127.0.0.1`。
+- 使用随机端口，不固定暴露 4173。
+- 使用 per-launch token，前端请求必须带 token。
+- 不允许任意路径读写，只允许用户授权的 Skill roots 和 app data dir。
+- 记录错误日志时避免写入 token、密钥、完整敏感路径。
+- GitHub token 优先使用系统安全存储或用户环境，不写入普通配置文件。
+- 对外部命令调用设置 timeout 和参数白名单。
+
+## 发布流水线建议
+
+### macOS
+
+需要准备：
+
+- Tauri build profile。
+- app icon。
+- bundle identifier。
+- Apple Developer ID certificate。
+- notarization credentials。
+- `.dmg` 产物。
+- 自动更新 signing key。
+
+CI 可分阶段：
+
+1. `npm run check`
+2. `npm run build`
+3. `cargo test`（引入 Tauri 后）
+4. `tauri build --target universal-apple-darwin` 或按架构构建
+5. codesign
+6. notarize
+7. staple
+8. upload artifacts
+
+### Windows
+
+需要准备：
+
+- WebView2 runtime 策略。
+- code signing certificate。
+- MSI/NSIS 配置。
+- 自动更新 signing key。
+
+CI 可分阶段：
+
+1. `npm run check`
+2. `npm run build`
+3. `cargo test`
+4. `tauri build`
+5. sign installer
+6. upload artifacts
+
+## 不建议立即做的事
+
+- 不建议立刻换 NestJS。它会引入大量框架结构，但不会直接解决 Tauri command 适配问题。
+- 不建议立刻把所有 Node 逻辑迁 Rust。当前业务逻辑还在快速变化，应先稳定边界。
+- 不建议把 Express route 和 Tauri command 同时写两套业务逻辑。应该共用 core service 或先明确 contract。
+- 不建议在桌面版继续默认写 `data/analysis.sqlite` 到项目目录。
+- 不建议提交构建产物 `public/dist` 或本地数据库。
+
+## 推荐近期落地任务
+
+第一批小步改造：
+
+1. 新增 `server/config.js`，集中端口、路径、schema version、常量。
+2. 新增 `core/utils/language.js`，迁移 `normalizeLanguage`、`localize`、progress 文案。
+3. 新增 `core/utils/hash.js`，迁移 `hashText`。
+4. 新增 `core/utils/paths.js`，迁移 `expandHomePath`、`resolveProjectPath`、`normalizeScanPath`。
+5. 新增 `core/services/progress.service.js`，迁移 progress store。
+6. 新增 `server/routes/config.routes.js` 和 `server/routes/progress.routes.js` 作为最小 route 拆分试点。
+
+这批任务风险低，能验证目录结构和 import 方式，不触碰 Copilot SDK 主流程。
+
+第二批改造：
+
+1. 拆 `skill-root.service.js` 和 `skill-root.repository.js`。
+2. 拆 `skill-index.service.js` 和 `skill-index.repository.js`。
+3. 拆 `skill-reader.service.js`。
+4. 让 `/api/skill-roots`、`/api/skills`、`/api/skills/:name` route 变薄。
+
+第三批改造：
+
+1. 拆规则分析和 graph layout。
+2. 拆 Copilot SDK provider。
+3. 拆模型分析和翻译服务。
+4. 定义 Tauri command contract。
+
+## 验收标准
+
+每个阶段完成时至少满足：
+
+- `npm run check` 通过。
+- `npm run build` 通过，如果前端或打包相关变更。
+- 本地 `npm start` 能启动。
+- Skill root 扫描可用。
+- Skill 列表可用。
+- Skill 详情可读。
+- 规则逻辑图可显示。
+- AI 评估缓存接口不回归。
+- 错误日志接口可用。
+- 未提交 `data/`、`public/dist/`、`node_modules/`。
+
+## 长期目标状态
+
+理想最终状态：
+
+```text
+React/Vite UI
+  -> api client contract
+    -> Web mode: Express adapter
+    -> Desktop mode: Tauri invoke adapter
+
+Core domain modules
+  -> Skill scanning
+  -> Skill reading
+  -> Rule analysis
+  -> Logic graph layout
+  -> Translation orchestration
+  -> Model analysis orchestration
+
+Runtime providers
+  -> filesystem: Node or Tauri
+  -> database: node:sqlite or Rust SQLite
+  -> picker: osascript/browser/Tauri dialog
+  -> model: Copilot SDK sidecar/provider
+  -> progress: memory/store
+```
+
+这样项目可以同时支持：
+
+- 开发期 Web 控制台。
+- 本地 Node 服务运行。
+- Tauri sidecar 桌面版。
+- 长期 Tauri native command 桌面版。
+
+最关键的是：不要把业务逻辑继续写进 Express route，也不要把未来 Tauri command 写成另一套重复业务逻辑。所有改造都应该朝向一个共享 core，多个 adapter。
