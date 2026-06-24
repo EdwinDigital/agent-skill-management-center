@@ -1439,9 +1439,9 @@ function App() {
                     </div>
                     <div className="empty-flow-stream" />
                     <div className="empty-flow-graph">
-                      <span className="empty-flow-node empty-flow-node-a">Intent</span>
-                      <span className="empty-flow-node empty-flow-node-b">Tools</span>
-                      <span className="empty-flow-node empty-flow-node-c">Flow</span>
+                      <span className="empty-flow-node empty-flow-node-a"><span>INPUT</span><strong>Intent</strong></span>
+                      <span className="empty-flow-node empty-flow-node-b"><span>TOOLS</span><strong>Read</strong></span>
+                      <span className="empty-flow-node empty-flow-node-c"><span>FLOW</span><strong>Graph</strong></span>
                     </div>
                   </div>
                 </CardContent>
