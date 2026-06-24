@@ -163,6 +163,19 @@
   html {
     @apply font-sans;
     }
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  input[type="button"]:not(:disabled),
+  input[type="submit"]:not(:disabled),
+  input[type="reset"]:not(:disabled),
+  summary {
+    cursor: pointer;
+    }
+  button:disabled,
+  [aria-disabled="true"],
+  input:disabled {
+    cursor: not-allowed;
+    }
 }
 
 @layer utilities {
@@ -214,6 +227,27 @@
     align-items: center;
     padding: 0.875rem 0.75rem 0.75rem;
     border-bottom: 1px solid color-mix(in srgb, var(--sidebar-border) 72%, transparent);
+  }
+
+  .sidebar-brand-home {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 0.75rem;
+    border-radius: var(--radius-lg);
+    color: inherit;
+    cursor: pointer;
+    text-align: left;
+    transition: background-color 160ms ease, box-shadow 160ms ease;
+  }
+
+  .sidebar-brand-home:hover {
+    background: color-mix(in srgb, var(--sidebar-accent) 72%, transparent);
+  }
+
+  .sidebar-brand-home:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--sidebar-ring) 72%, transparent);
+    outline-offset: 3px;
   }
 
   .sidebar-brand-icon {

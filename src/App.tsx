@@ -925,6 +925,8 @@ function App() {
     setSelectedName("");
     setSelectedNode(null);
     setLoadingSkill(false);
+    setGeneratingMap(false);
+    setActiveProgressRequestId(null);
     setSkillTranslation(null);
     setSkillDocMode("original");
     setLogicMapMeta(text.logicMapMeta);
@@ -1257,16 +1259,22 @@ function App() {
           <div ref={sidebarScrollRef} className={cn("h-full overflow-y-auto", sidebarCollapsed && "hidden")} data-sidebar-scroll="true">
             <div className="sidebar-console flex h-full w-full min-w-0 flex-col">
               <div className="sidebar-brand-row">
-                <div className="flex min-w-0 items-center gap-3">
-                  <div className="sidebar-brand-icon">
+                <button
+                  type="button"
+                  onClick={showRootOverview}
+                  className="sidebar-brand-home"
+                  aria-label={text.appTitle}
+                  title={text.appTitle}
+                >
+                  <span className="sidebar-brand-icon">
                     <Waypoints className="size-4" strokeWidth={1.8} aria-hidden="true" />
-                  </div>
-                  <h1 className="sidebar-brand-title" aria-label={text.appTitle}>
+                  </span>
+                  <span className="sidebar-brand-title" aria-hidden="true">
                     {text.appTitleKicker ? <span className="sidebar-brand-title-kicker">{text.appTitleKicker}</span> : null}
                     <span className="sidebar-brand-title-primary">{text.appTitlePrimary}</span>
                     {text.appTitleSecondary ? <span className="sidebar-brand-title-secondary">{text.appTitleSecondary}</span> : null}
-                  </h1>
-                </div>
+                  </span>
+                </button>
                 <Button
                   variant="ghost"
                   size="icon-sm"
