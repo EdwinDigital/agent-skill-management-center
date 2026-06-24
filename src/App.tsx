@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type FocusEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type FocusEvent, type PointerEvent, type ReactNode } from "react";
 import {
   BrainCircuit,
   ChevronDown,
@@ -243,7 +243,7 @@ type PendingDirectory = {
 const defaultSkillPageSize = 10;
 const minSkillPageSize = 1;
 const maxSkillPageSize = 18;
-const skillRowPitch = 37;
+const skillRowPitch = 39;
 const graphMinZoom = 0.6;
 const graphMinAutoZoom = 0.6;
 const graphMaxZoom = 1.6;
@@ -607,10 +607,13 @@ function App() {
 
       const sidebarRect = sidebar.getBoundingClientRect();
       const listRect = list.getBoundingClientRect();
+      const section = list.closest(".sidebar-section") as HTMLElement | null;
+      const sectionRect = section?.getBoundingClientRect() || sidebarRect;
+      const sectionStyle = section ? window.getComputedStyle(section) : null;
       const paginationHeight = showSkillPagination && pagination ? pagination.getBoundingClientRect().height : 0;
-      const bottomPadding = window.matchMedia("(min-width: 1024px)").matches ? 20 : 16;
-      const listToPaginationGap = showSkillPagination ? 16 : 0;
-      const availableHeight = sidebarRect.bottom - bottomPadding - listRect.top - paginationHeight - listToPaginationGap;
+      const bottomPadding = sectionStyle ? Number.parseFloat(sectionStyle.paddingBottom) || 0 : 0;
+      const listToPaginationGap = showSkillPagination && sectionStyle ? Number.parseFloat(sectionStyle.rowGap) || 0 : 0;
+      const availableHeight = sectionRect.bottom - bottomPadding - listRect.top - paginationHeight - listToPaginationGap;
       const nextPageSize = Math.min(maxSkillPageSize, Math.max(minSkillPageSize, Math.floor((availableHeight + 8) / skillRowPitch)));
       setSkillPageSize((current) => current === nextPageSize ? current : nextPageSize);
     }
@@ -1438,20 +1441,50 @@ function App() {
                       <span><FileText /> refs.md</span>
                       <div className="empty-flow-transform"><ScanSearch /><span>parse triggers + tools</span></div>
                     </div>
-                    <div className="empty-flow-stream" />
+                    <div className="empty-flow-analyzer">
+                      <Search />
+                      <ChevronRight />
+                    </div>
                     <div className="empty-flow-graph">
-                      <svg className="empty-flow-edges" viewBox="0 0 420 150" preserveAspectRatio="none" aria-hidden="true">
-                        <path d="M 54 74 C 96 74, 106 74, 148 74" />
-                        <path d="M 224 74 C 248 38, 276 35, 306 35" />
-                        <path d="M 224 74 C 248 110, 276 114, 306 114" />
-                        <path d="M 354 35 C 384 46, 392 58, 396 74" />
-                        <path d="M 354 114 C 384 102, 392 91, 396 74" />
+                      <svg className="empty-flow-logic" viewBox="0 0 470 180" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+                        <defs>
+                          <marker id="empty-flow-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
+                            <path d="M 1 1 L 7 4 L 1 7 Z" />
+                          </marker>
+                        </defs>
+                        <g className="empty-flow-logic-edges">
+                          <path d="M 108 90 H 142" />
+                          <path d="M 238 90 H 258 V 48 H 286" />
+                          <path d="M 238 90 H 258 V 132 H 286" />
+                          <path d="M 352 48 H 370 V 90 H 382" />
+                          <path d="M 352 132 H 370 V 90 H 382" />
+                        </g>
+                        <g className="empty-flow-graph-node" transform="translate(18 66)">
+                          <rect width="90" height="48" rx="10" />
+                          <text className="empty-flow-graph-node-type" x="14" y="18">INPUT</text>
+                          <text className="empty-flow-graph-node-title" x="14" y="36">Intent</text>
+                        </g>
+                        <g className="empty-flow-graph-node" transform="translate(142 66)">
+                          <rect width="96" height="48" rx="10" />
+                          <text className="empty-flow-graph-node-type" x="14" y="18">CHECK</text>
+                          <text className="empty-flow-graph-node-title" x="14" y="36">Trigger?</text>
+                        </g>
+                        <g className="empty-flow-graph-node empty-flow-graph-node-branch" transform="translate(286 24)">
+                          <rect width="66" height="48" rx="10" />
+                          <text className="empty-flow-graph-node-type" x="12" y="18">TOOL</text>
+                          <text className="empty-flow-graph-node-title" x="12" y="36">Run</text>
+                        </g>
+                        <g className="empty-flow-graph-node empty-flow-graph-node-branch" transform="translate(286 108)">
+                          <rect width="66" height="48" rx="10" />
+                          <text className="empty-flow-graph-node-type" x="12" y="18">DOC</text>
+                          <text className="empty-flow-graph-node-title" x="12" y="36">Read</text>
+                        </g>
+                        <g className="empty-flow-graph-node" transform="translate(382 66)">
+                          <rect width="72" height="48" rx="10" />
+                          <text className="empty-flow-graph-node-type" x="12" y="18">FLOW</text>
+                          <text className="empty-flow-graph-node-title" x="12" y="36">Graph</text>
+                        </g>
                       </svg>
-                      <span className="empty-flow-node empty-flow-node-input"><span>INPUT</span><strong>Intent</strong></span>
-                      <span className="empty-flow-node empty-flow-node-decision"><span>CHECK</span><strong>Trigger?</strong></span>
-                      <span className="empty-flow-node empty-flow-node-tool"><span>TOOL</span><strong>Run</strong></span>
-                      <span className="empty-flow-node empty-flow-node-doc"><span>DOC</span><strong>Read</strong></span>
-                      <span className="empty-flow-node empty-flow-node-output"><span>FLOW</span><strong>Graph</strong></span>
                     </div>
                   </div>
                 </CardContent>
@@ -2113,7 +2146,10 @@ function GraphCanvas({ graph, selectedNode, onSelectNode, hint, labels }: { grap
   const compactGraph = useMemo(() => compactLayoutGraph(graph), [graph]);
   const [zoom, setZoom] = useState(1);
   const [autoZoom, setAutoZoom] = useState(true);
+  const [isDraggingGraph, setIsDraggingGraph] = useState(false);
   const graphFrameRef = useRef<HTMLDivElement | null>(null);
+  const graphDragRef = useRef<{ pointerId: number; startX: number; startY: number; scrollLeft: number; scrollTop: number; moved: boolean } | null>(null);
+  const suppressGraphClickRef = useRef(false);
   const nodeMap = new Map(compactGraph.nodes.map((node) => [node.id, node]));
   const nodeWidth = 128;
   const nodeHeight = 126;
@@ -2137,6 +2173,52 @@ function GraphCanvas({ graph, selectedNode, onSelectNode, hint, labels }: { grap
   const resetZoom = () => {
     setAutoZoom(true);
     setZoom(calculateGraphAutoZoom(graphFrameRef.current?.clientWidth || 0, contentRight));
+  };
+
+  const getGraphViewport = () => graphFrameRef.current?.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]') || null;
+
+  const startGraphDrag = (event: PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    if ((event.target as HTMLElement | null)?.closest("button")) return;
+    const viewport = getGraphViewport();
+    if (!viewport) return;
+    graphDragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      scrollLeft: viewport.scrollLeft,
+      scrollTop: viewport.scrollTop,
+      moved: false,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setAutoZoom(false);
+    setIsDraggingGraph(true);
+  };
+
+  const moveGraphDrag = (event: PointerEvent<HTMLDivElement>) => {
+    const drag = graphDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const viewport = getGraphViewport();
+    if (!viewport) return;
+    const deltaX = event.clientX - drag.startX;
+    const deltaY = event.clientY - drag.startY;
+    if (Math.abs(deltaX) > 3 || Math.abs(deltaY) > 3) {
+      drag.moved = true;
+      suppressGraphClickRef.current = true;
+    }
+    viewport.scrollLeft = drag.scrollLeft - deltaX;
+    viewport.scrollTop = drag.scrollTop - deltaY;
+  };
+
+  const endGraphDrag = (event: PointerEvent<HTMLDivElement>) => {
+    const drag = graphDragRef.current;
+    if (drag?.pointerId === event.pointerId) {
+      graphDragRef.current = null;
+    }
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    setIsDraggingGraph(false);
   };
 
   useEffect(() => {
@@ -2175,7 +2257,15 @@ function GraphCanvas({ graph, selectedNode, onSelectNode, hint, labels }: { grap
       </div>
       <div ref={graphFrameRef} className="relative">
         <ScrollArea className="h-[clamp(24rem,58vh,34rem)] w-full max-w-full overflow-hidden" data-graph-scroll="true">
-          <div className="relative max-w-none" style={{ width: scaledWidth, height: scaledHeight }}>
+          <div
+            className={cn("graph-drag-surface relative max-w-none", isDraggingGraph && "is-dragging")}
+            style={{ width: scaledWidth, height: scaledHeight }}
+            onPointerDown={startGraphDrag}
+            onPointerMove={moveGraphDrag}
+            onPointerUp={endGraphDrag}
+            onPointerCancel={endGraphDrag}
+            onPointerLeave={endGraphDrag}
+          >
             <div className="absolute left-0 top-0 origin-top-left" style={{ width, height, transform: `scale(${zoom})` }}>
               <svg className="absolute inset-0" width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden="true">
                 <defs>
@@ -2216,7 +2306,13 @@ function GraphCanvas({ graph, selectedNode, onSelectNode, hint, labels }: { grap
                 <button
                   key={node.id}
                   type="button"
-                  onClick={() => onSelectNode(node)}
+                  onClick={() => {
+                    if (suppressGraphClickRef.current) {
+                      suppressGraphClickRef.current = false;
+                      return;
+                    }
+                    onSelectNode(node);
+                  }}
                   title={`${node.title}\n${node.detail}`}
                   className={cn(
                     "absolute flex h-[7.875rem] w-32 flex-col gap-1.5 rounded-lg border bg-card p-2.5 text-left text-card-foreground shadow-sm transition-colors hover:bg-accent",
