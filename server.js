@@ -25,6 +25,8 @@ const progressTtlMs = 10 * 60 * 1000;
 const maxFileBytes = 220_000;
 const skillManifestFileName = "SKILL.md";
 const skillIndexMaxDepth = 10;
+const inspectedSkillRootCacheTtlMs = 5 * 60 * 1000;
+const inspectedSkillRootCache = new Map();
 const descriptionCandidates = [
   "SKILL.md",
   "skill.md",
@@ -722,7 +724,7 @@ function addCustomSkillRoot({ label, value, type = "server", language = "en" }) 
   }
   const sourceType = type === "browser" ? "browser" : "custom";
   const normalizedValue = sourceType === "browser" ? value : normalizeScanPath(value, sourceType);
-  const scannedSkills = sourceType === "browser" ? [] : scanSkillDirectories(normalizedValue);
+  const scannedSkills = sourceType === "browser" ? [] : getCachedInspectedSkills(normalizedValue) || scanAndCacheSkillDirectories(normalizedValue);
   if (sourceType !== "browser" && scannedSkills.length === 0) {
     throw new Error(language === "zh" ? "当前目录没有找到 Skill 定义文件（SKILL.md）。" : "No Skill definition file (SKILL.md) was found in the selected directory.");
   }
@@ -769,7 +771,7 @@ async function inspectSkillRoot(root, language = "en") {
     throw new Error("Selected path is not a directory.");
   }
 
-  const skills = scanSkillDirectories(normalizedRoot);
+  const skills = scanAndCacheSkillDirectories(normalizedRoot);
   return {
     path: normalizedRoot,
     suggestedLabel: path.basename(normalizedRoot) || "Custom skills",
@@ -845,6 +847,23 @@ function fileExists(value) {
   } catch {
     return false;
   }
+}
+
+function getCachedInspectedSkills(root) {
+  const rootPath = normalizeScanPath(root, "custom");
+  const cached = inspectedSkillRootCache.get(rootPath);
+  if (!cached || Date.now() - cached.createdAt > inspectedSkillRootCacheTtlMs) {
+    inspectedSkillRootCache.delete(rootPath);
+    return null;
+  }
+  return cached.skills;
+}
+
+function scanAndCacheSkillDirectories(root) {
+  const rootPath = normalizeScanPath(root, "custom");
+  const skills = scanSkillDirectories(rootPath);
+  inspectedSkillRootCache.set(rootPath, { skills, createdAt: Date.now() });
+  return skills;
 }
 
 function scanSkillDirectories(root, current = root, depth = 0) {

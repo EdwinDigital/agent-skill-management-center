@@ -201,6 +201,8 @@ ROLLBACK
 - model provider：当前是 GitHub Copilot SDK，未来可能仍由 Node sidecar 承担，也可能接入其它 provider。
 - database provider：短期 `node:sqlite`，长期可考虑 Rust `rusqlite` 或 Tauri SQL plugin。
 
+其中 picker provider 是桌面化后优先迁移的本地能力。当前 Web/Node 模式通过 Express 调用 `osascript` 间接打开 macOS 文件夹选择器，首次触发 Finder/AppleEvents 时存在明显冷启动开销；并且当前请求会等待用户选择目录后继续做目录 inspect，用户体感上会把系统对话框启动、目录选择和 Skill 扫描混成一次慢操作。Tauri 版应改为前端通过 Tauri dialog plugin 或 native command 直接打开目录选择器，绕开 `localhost -> Node -> osascript -> Finder` 的链路；选中目录后再调用 core service 扫描和索引。
+
 ## Tauri 适配路线
 
 ### 路线 A：Node sidecar 快速桌面版
@@ -287,6 +289,21 @@ Tauri WebView UI
 - Gatekeeper 兼容。
 - 后续自动更新签名。
 - 文件访问权限和用户选择目录权限。
+
+如果后续不上架 App Store，而是通过 `.dmg` 直接下载分发，Tauri 官方支持这种路径，但正式分发仍需要满足 Apple 的桌面应用安全要求：
+
+- `.dmg` 只是安装载体，内部核心仍是 `.app` bundle。
+- 构建 `.app`/`.dmg` 需要在 macOS 环境完成。
+- 面向外部用户的正式版本需要付费 Apple Developer Program。
+- App Store 外分发应使用 `Developer ID Application` 证书签名，而不是 App Store 使用的 `Apple Distribution` 证书。
+- 只有 Apple Developer 账号的 `Account Holder` 可以创建 Developer ID Application 证书。
+- 免费 Apple Developer 账号只适合开发测试，不能完成 notarization，用户打开时仍会看到未验证提示。
+- App Store 外分发需要 notarization 公证，并在产物上 staple 公证票据，才能减少 Gatekeeper 拦截和“无法验证开发者”的体验问题。
+- 公证可通过 App Store Connect API Key 或 Apple ID 凭据完成；CI 中更适合使用 API Key 和密钥文件。
+- 如果第一版采用 Node sidecar，sidecar 可执行文件、嵌入资源、额外 dylib/framework 也必须被正确打包和签名，否则 notarization 或 Gatekeeper 可能失败。
+- Tauri 支持 ad-hoc signing（`signingIdentity` 为 `-`），但这只适合内部测试；用户仍可能需要在系统“隐私与安全性”里手动允许打开。
+
+DMG 体验层面可以配置背景图、窗口尺寸、App 图标位置和 Applications 文件夹图标位置，但这些不是合规门槛。真正的发布门槛是 `.app` bundle 的签名、公证、Gatekeeper 兼容，以及 sidecar/额外二进制的签名完整性。
 
 ### Windows
 
@@ -443,6 +460,8 @@ const runtime = {
 - 抽象 `databasePath`：Web/dev 与 desktop app data dir 分开。
 - 抽象 `modelProvider`：Copilot SDK 不直接散落在业务服务。
 
+picker 抽象需要把“打开选择器”和“扫描目录”拆成两个步骤：picker 只返回用户授权的目录路径；Skill inspect/index 由 service 层异步执行。这样 Web/Node 模式可以继续保留 `osascript` fallback，Tauri 模式则使用原生 dialog，避免 AppleScript 冷启动和 localhost 往返造成的点击延迟。
+
 验收：
 
 - core service 可接收 runtime context。
@@ -495,6 +514,7 @@ const runtime = {
 
 - sidecar 缩小为 model provider，或完全移除。
 - 前端 API 调用可通过 adapter 切换 HTTP 与 Tauri invoke。
+- “添加路径”在 Tauri 模式下使用 native dialog，不再通过 Express 调 `osascript` 打开 macOS 文件夹选择器。
 
 ## 前端适配建议
 
@@ -548,17 +568,20 @@ await api.logicMap.generate({ skill, model, language, requestId });
 - notarization credentials。
 - `.dmg` 产物。
 - 自动更新 signing key。
+- 如果使用 Node sidecar，准备 sidecar 打包、签名和生命周期管理策略。
+- 如果使用 GitHub Actions 等 CI，准备 `.p12` 证书的 base64 Secret、证书密码、App Store Connect API Key、Issuer ID 和 Key ID。
 
 CI 可分阶段：
 
 1. `npm run check`
 2. `npm run build`
 3. `cargo test`（引入 Tauri 后）
-4. `tauri build --target universal-apple-darwin` 或按架构构建
-5. codesign
-6. notarize
-7. staple
-8. upload artifacts
+4. `tauri build --target universal-apple-darwin --bundles dmg` 或按架构构建
+5. codesign `.app`、sidecar 和嵌入的额外二进制
+6. notarize `.dmg` 或待分发产物
+7. staple 公证票据
+8. 在干净 macOS 机器上下载、打开并验证 Gatekeeper 行为
+9. upload artifacts
 
 ### Windows
 

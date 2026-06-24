@@ -31,6 +31,7 @@ import {
   Target,
   Trash2,
   WandSparkles,
+  Waypoints,
   Wrench,
   X,
   ZoomIn,
@@ -261,7 +262,10 @@ const storageKeys = {
 const copy = {
   en: {
     appEyebrow: "Skill OS",
-    appTitle: "AI Agent Skills Console",
+    appTitle: "Agent Skills Management Center",
+    appTitleKicker: "",
+    appTitlePrimary: "Agent Skills",
+    appTitleSecondary: "Management Center",
     signIn: "Sign in with GitHub",
     signedIn: "Signed in",
     signOut: "Sign out",
@@ -388,7 +392,10 @@ const copy = {
   },
   zh: {
     appEyebrow: "Skill OS",
-    appTitle: "AI智能体技能控制台",
+    appTitle: "Skills管理中心",
+    appTitleKicker: "Agent Skills Management Center",
+    appTitlePrimary: "Skills管理中心",
+    appTitleSecondary: "",
     signIn: "登录 GitHub",
     signedIn: "已登录",
     signOut: "注销",
@@ -531,6 +538,7 @@ function App() {
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const [pathHint, setPathHint] = useState("");
   const [loadingRoot, setLoadingRoot] = useState(false);
+  const [loadingSkillList, setLoadingSkillList] = useState(false);
   const [loadingSkill, setLoadingSkill] = useState(false);
   const [generatingMap, setGeneratingMap] = useState(false);
   const [activeProgressRequestId, setActiveProgressRequestId] = useState<string | null>(null);
@@ -630,7 +638,7 @@ function App() {
       window.removeEventListener("resize", updateSkillPageSize);
       resizeObserver.disconnect();
     };
-  }, [sidebarCollapsed, language, loadingRoot, roots.length, rootId, showSkillPagination]);
+  }, [sidebarCollapsed, language, loadingSkillList, roots.length, rootId, showSkillPagination]);
 
   useEffect(() => {
     setPathHint(text.defaultPath);
@@ -924,7 +932,7 @@ function App() {
   }
 
   async function loadSkillsFromServer(root: SkillRoot) {
-    setLoadingRoot(true);
+    setLoadingSkillList(true);
     setPathHint(text.readingRoot);
     try {
       const result = await fetchJson<{ root: string; skills: SkillListItem[] }>(`/api/skills?root=${encodeURIComponent(root.value || "")}&language=${language}`);
@@ -939,7 +947,7 @@ function App() {
     } catch (error) {
       notifyError(error);
     } finally {
-      setLoadingRoot(false);
+      setLoadingSkillList(false);
     }
   }
 
@@ -1251,9 +1259,13 @@ function App() {
               <div className="sidebar-brand-row">
                 <div className="flex min-w-0 items-center gap-3">
                   <div className="sidebar-brand-icon">
-                    <BrainCircuit className="size-4" aria-hidden="true" />
+                    <Waypoints className="size-4" strokeWidth={1.8} aria-hidden="true" />
                   </div>
-                  <h1 className="min-w-0 truncate text-[15px] font-semibold leading-6 tracking-normal text-sidebar-foreground">{text.appTitle}</h1>
+                  <h1 className="sidebar-brand-title" aria-label={text.appTitle}>
+                    {text.appTitleKicker ? <span className="sidebar-brand-title-kicker">{text.appTitleKicker}</span> : null}
+                    <span className="sidebar-brand-title-primary">{text.appTitlePrimary}</span>
+                    {text.appTitleSecondary ? <span className="sidebar-brand-title-secondary">{text.appTitleSecondary}</span> : null}
+                  </h1>
                 </div>
                 <Button
                   variant="ghost"
@@ -1337,13 +1349,18 @@ function App() {
                 </div>
 
                 <div ref={skillListRef} className="sidebar-skill-list flex min-h-0 flex-col gap-1.5" role="listbox" aria-label="Available skills">
-                  {loadingRoot ? <SkillListSkeleton /> : visibleSkills.length ? visibleSkills.map((skill) => (
+                  {loadingSkillList && !skills.length ? <SkillListSkeleton /> : visibleSkills.length ? visibleSkills.map((skill) => (
                     <button
                       key={skill.path || skill.name}
                       type="button"
                       role="option"
                       aria-selected={(skill.path || skill.name) === selectedName}
-                      onClick={() => selectSkill(skill.name, skill.path)}
+                      aria-disabled={loadingSkillList}
+                      onClick={() => {
+                        if (!loadingSkillList) {
+                          void selectSkill(skill.name, skill.path);
+                        }
+                      }}
                       className={cn("sidebar-skill-row", (skill.path || skill.name) === selectedName && "is-selected")}
                     >
                       <span className="sidebar-skill-icon"><BrainCircuit className="size-3.5" aria-hidden="true" /></span>
