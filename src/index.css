@@ -333,7 +333,7 @@
   }
 
   .sidebar-nav-item.is-active {
-    border-color: color-mix(in srgb, var(--primary) 24%, var(--sidebar-border));
+    border-color: transparent;
     background: color-mix(in srgb, var(--app-side-active) 92%, transparent);
     color: var(--sidebar-foreground);
     box-shadow: var(--app-side-active-shadow);
