@@ -653,6 +653,7 @@
 
   .empty-flow-source svg,
   .empty-flow-files svg,
+  .empty-flow-transform svg,
   .empty-guide-icon svg {
     width: 1rem;
     height: 1rem;
@@ -687,6 +688,23 @@
   .empty-flow-files span:nth-child(2) { animation-delay: 0.45s; }
   .empty-flow-files span:nth-child(3) { animation-delay: 0.9s; }
 
+  .empty-flow-transform {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 0.45rem;
+    border-radius: 0.7rem;
+    border: 1px dashed color-mix(in srgb, var(--primary) 42%, transparent);
+    background: color-mix(in srgb, var(--primary) 12%, transparent);
+    padding: 0.38rem 0.5rem;
+    color: var(--primary);
+    font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
+    font-size: 0.65rem;
+    font-weight: 800;
+    opacity: 0.72;
+    animation: empty-flow-transform 6s ease-in-out infinite;
+  }
+
   .empty-flow-stream {
     display: none;
     position: absolute;
@@ -720,22 +738,39 @@
   }
 
   .empty-flow-graph {
-    display: grid;
+    position: relative;
+    display: block;
     min-width: 0;
     min-height: 0;
     height: 100%;
-    align-items: center;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 0.75rem;
     border-radius: 1rem;
     padding: 0.75rem;
+    overflow: hidden;
+  }
+
+  .empty-flow-edges {
+    position: absolute;
+    inset: 0.75rem;
+    width: calc(100% - 1.5rem);
+    height: calc(100% - 1.5rem);
+    overflow: visible;
+    pointer-events: none;
+  }
+
+  .empty-flow-edges path {
+    fill: none;
+    stroke: color-mix(in srgb, var(--primary) 38%, transparent);
+    stroke-dasharray: 6 8;
+    stroke-linecap: round;
+    stroke-width: 2;
+    animation: empty-flow-edge-drift 5.5s linear infinite;
   }
 
   .empty-flow-node {
-    position: relative;
+    position: absolute;
     display: flex;
-    min-width: 0;
-    min-height: 3rem;
+    width: min(5.8rem, 25%);
+    min-height: 2.72rem;
     flex-direction: column;
     justify-content: center;
     gap: 0.2rem;
@@ -751,9 +786,11 @@
     animation: empty-flow-node-pop 6s ease-in-out infinite;
   }
 
-  .empty-flow-node-a,
-  .empty-flow-node-b { animation-delay: 0.45s; }
-  .empty-flow-node-c { animation-delay: 0.9s; }
+  .empty-flow-node-input { top: calc(50% - 1.36rem); left: 0.75rem; }
+  .empty-flow-node-decision { top: calc(50% - 1.36rem); left: calc(37% - 2.9rem); }
+  .empty-flow-node-tool { top: 0.85rem; right: calc(18% - 2.9rem); animation-delay: 0.45s; }
+  .empty-flow-node-doc { right: calc(18% - 2.9rem); bottom: 0.85rem; animation-delay: 0.7s; }
+  .empty-flow-node-output { top: calc(50% - 1.36rem); right: 0.75rem; animation-delay: 0.95s; }
 
   .empty-flow-node span {
     color: var(--muted-foreground);
@@ -770,36 +807,6 @@
     line-height: 1.15;
   }
 
-  .empty-flow-node-a::after,
-  .empty-flow-node-b::after {
-    position: absolute;
-    top: 50%;
-    left: calc(100% + 0.12rem);
-    width: calc(0.75rem - 0.24rem);
-    height: 2px;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--primary) 48%, transparent);
-    content: "";
-    transform: translateY(-50%) scaleX(0.3);
-    transform-origin: left center;
-    animation: empty-flow-arrow-line 6s ease-in-out infinite;
-  }
-
-  .empty-flow-node-a::before,
-  .empty-flow-node-b::before {
-    position: absolute;
-    top: 50%;
-    left: calc(100% + 0.55rem);
-    width: 0.4rem;
-    height: 0.4rem;
-    border-top: 2px solid color-mix(in srgb, var(--primary) 54%, transparent);
-    border-right: 2px solid color-mix(in srgb, var(--primary) 54%, transparent);
-    content: "";
-    transform: translateY(-50%) rotate(45deg);
-    opacity: 0.45;
-    animation: empty-flow-arrow-head 6s ease-in-out infinite;
-  }
-
   @keyframes empty-flow-file-read {
     0%, 72%, 100% { opacity: 0.55; transform: translateX(-0.25rem); }
     12%, 46% { opacity: 1; transform: translateX(0); }
@@ -812,14 +819,14 @@
     100% { opacity: 0; transform: translateX(calc(100% + 4.25rem)) scale(0.8); }
   }
 
-  @keyframes empty-flow-arrow-line {
-    0%, 42%, 100% { opacity: 0.24; transform: translateY(-50%) scaleX(0.3); }
-    58%, 78% { opacity: 0.9; transform: translateY(-50%) scaleX(1); }
+  @keyframes empty-flow-transform {
+    0%, 48%, 100% { opacity: 0.72; transform: translateX(0); }
+    58%, 82% { opacity: 1; transform: translateX(0.18rem); }
   }
 
-  @keyframes empty-flow-arrow-head {
-    0%, 42%, 100% { opacity: 0.32; }
-    58%, 78% { opacity: 0.9; }
+  @keyframes empty-flow-edge-drift {
+    from { stroke-dashoffset: 28; }
+    to { stroke-dashoffset: 0; }
   }
 
   @keyframes empty-flow-node-pop {
@@ -829,10 +836,10 @@
 
   @media (prefers-reduced-motion: reduce) {
     .empty-flow-files span,
+    .empty-flow-transform,
     .empty-flow-stream::before,
     .empty-flow-stream::after,
-    .empty-flow-node::before,
-    .empty-flow-node::after,
+    .empty-flow-edges path,
     .empty-flow-node {
       animation: none;
     }

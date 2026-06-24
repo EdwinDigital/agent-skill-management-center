@@ -1436,12 +1436,22 @@ function App() {
                       <span><FileText /> SKILL.md</span>
                       <span><FileCode2 /> tools.json</span>
                       <span><FileText /> refs.md</span>
+                      <div className="empty-flow-transform"><ScanSearch /><span>parse triggers + tools</span></div>
                     </div>
                     <div className="empty-flow-stream" />
                     <div className="empty-flow-graph">
-                      <span className="empty-flow-node empty-flow-node-a"><span>INPUT</span><strong>Intent</strong></span>
-                      <span className="empty-flow-node empty-flow-node-b"><span>TOOLS</span><strong>Read</strong></span>
-                      <span className="empty-flow-node empty-flow-node-c"><span>FLOW</span><strong>Graph</strong></span>
+                      <svg className="empty-flow-edges" viewBox="0 0 420 150" preserveAspectRatio="none" aria-hidden="true">
+                        <path d="M 54 74 C 96 74, 106 74, 148 74" />
+                        <path d="M 224 74 C 248 38, 276 35, 306 35" />
+                        <path d="M 224 74 C 248 110, 276 114, 306 114" />
+                        <path d="M 354 35 C 384 46, 392 58, 396 74" />
+                        <path d="M 354 114 C 384 102, 392 91, 396 74" />
+                      </svg>
+                      <span className="empty-flow-node empty-flow-node-input"><span>INPUT</span><strong>Intent</strong></span>
+                      <span className="empty-flow-node empty-flow-node-decision"><span>CHECK</span><strong>Trigger?</strong></span>
+                      <span className="empty-flow-node empty-flow-node-tool"><span>TOOL</span><strong>Run</strong></span>
+                      <span className="empty-flow-node empty-flow-node-doc"><span>DOC</span><strong>Read</strong></span>
+                      <span className="empty-flow-node empty-flow-node-output"><span>FLOW</span><strong>Graph</strong></span>
                     </div>
                   </div>
                 </CardContent>
