@@ -306,15 +306,15 @@ const copy = {
     clearSearch: "Clear search",
     previous: "Previous",
     next: "Next",
-    heroEyebrow: "Execution cartography",
-    heroTitle: "A shadcn console for skill logic.",
-    heroBody: "Scan local Skill directories, inspect triggers and tools, then map each execution path as a readable agent workflow.",
-    emptyEyebrow: "No skill selected",
-    emptyTitle: "Select a skill to inspect its execution model.",
-    emptyBody: "The workspace stays dense and operational: directory scan on the left, evidence and graph on the right, AI evaluation only when you ask for it.",
-    guideDirectory: "Choose a Skill directory.",
-    guideSkill: "Pick a Skill from the paged list.",
-    guideGraph: "Inspect nodes, evidence, tools, and source files.",
+    heroEyebrow: "Local Skill intelligence map",
+    heroTitle: "Visualize local Skills and shape your private super agent.",
+    heroBody: "Scan Skill roots on this machine, connect triggers, tools, evidence, and execution paths, then decide which capabilities deserve to become part of your personal agent system.",
+    emptyEyebrow: "Start with a local Skill",
+    emptyTitle: "Turn scattered Skill files into an inspectable intelligence map.",
+    emptyBody: "Use the left rail to discover local Skill directories. The console keeps raw files, rule evidence, workflow graphs, and optional AI evaluation together so your private super agent can grow from verified local knowledge.",
+    guideDirectory: "Scan or add a local Skill directory.",
+    guideSkill: "Choose a Skill to reveal its trigger logic and tool surface.",
+    guideGraph: "Inspect evidence, execution paths, and agent-building signals.",
     complexity: "Complexity",
     roi: "ROI",
     modelScore: "Model score",
@@ -363,6 +363,8 @@ const copy = {
     noMatchingSkills: "No skills match this name.",
     noTools: "No explicit tools detected.",
     noTriggers: "No trigger prompts or typical scenarios found.",
+    copyPath: "Copy path",
+    pathCopied: "Path copied",
     copyPrompt: "Copy prompt",
     promptCopied: "Prompt copied",
     noFiles: "No files found.",
@@ -431,15 +433,15 @@ const copy = {
     clearSearch: "清除搜索",
     previous: "上一页",
     next: "下一页",
-    heroEyebrow: "执行地图",
-    heroTitle: "按 shadcn 标准重做的 Skill 控制台。",
-    heroBody: "扫描本地 Skill 目录，检查触发条件与工具，再把每条执行路径呈现为可读的 Agent 工作流。",
-    emptyEyebrow: "尚未选择 Skill",
-    emptyTitle: "选择一个 Skill，查看它的执行模型。",
-    emptyBody: "界面保持高密度、面向操作：左侧目录扫描，右侧证据与图谱，AI 评估只在你需要时触发。",
-    guideDirectory: "选择 Skill 目录。",
-    guideSkill: "从分页列表中选择 Skill。",
-    guideGraph: "检查节点、证据、工具与源文件。",
+    heroEyebrow: "本地 Skill 智能地图",
+    heroTitle: "可视化分析本地 Skill，打造你的私人超级智能体。",
+    heroBody: "扫描这台机器上的 Skill 根目录，串联触发条件、工具、证据与执行路径，再判断哪些能力值得沉淀进你的个人 Agent 系统。",
+    emptyEyebrow: "从本地 Skill 开始",
+    emptyTitle: "把散落的 Skill 文件变成可审查的智能地图。",
+    emptyBody: "通过左侧栏发现本地 Skill 目录。控制台会把原始文件、规则证据、工作流图谱和可选 AI 评估放在一起，让私人超级智能体从可信的本地知识生长出来。",
+    guideDirectory: "扫描或添加本地 Skill 目录。",
+    guideSkill: "选择一个 Skill，展开它的触发逻辑与工具边界。",
+    guideGraph: "查看证据、执行路径和构建智能体的信号。",
     complexity: "复杂度",
     roi: "ROI",
     modelScore: "模型评分",
@@ -488,6 +490,8 @@ const copy = {
     noMatchingSkills: "没有匹配该名称的 Skill。",
     noTools: "未检测到明确工具。",
     noTriggers: "未找到触发 Prompt 或典型场景。",
+    copyPath: "复制路径",
+    pathCopied: "路径已复制",
     copyPrompt: "复制 Prompt",
     promptCopied: "Prompt 已复制",
     noFiles: "未找到文件。",
@@ -905,6 +909,17 @@ function App() {
     }
   }
 
+  function showRootOverview() {
+    setSelectedSkill(null);
+    setSelectedName("");
+    setSelectedNode(null);
+    setLoadingSkill(false);
+    setSkillTranslation(null);
+    setSkillDocMode("original");
+    setLogicMapMeta(text.logicMapMeta);
+    setEvaluationStatus(text.rulesEvaluationPrompt);
+  }
+
   async function loadSkillsFromServer(root: SkillRoot) {
     setLoadingRoot(true);
     setPathHint(text.readingRoot);
@@ -1195,6 +1210,15 @@ function App() {
     }
   }
 
+  async function copyPathToClipboard(path: string) {
+    try {
+      await copyTextToClipboard(path);
+      toast.success(text.pathCopied);
+    } catch (error) {
+      notifyError(error);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <div
@@ -1252,6 +1276,7 @@ function App() {
                     <button
                       type="button"
                       className="sidebar-nav-item is-active"
+                      onClick={showRootOverview}
                     >
                       <FolderOpen className="size-4" aria-hidden="true" />
                       <span className="min-w-0 flex-1 truncate">{text.skillDirectory}</span>
@@ -1370,34 +1395,39 @@ function App() {
         <main className="detail-main">
           <div className="detail-surface">
             {!selectedSkill && !loadingSkill ? (
-              <div className="grid gap-3">
-              <Card className="overflow-hidden border-transparent bg-[image:var(--app-hero)] text-white shadow-[var(--app-shadow)]">
-                <CardHeader className="pb-0">
-                  <CardDescription className="font-mono uppercase tracking-normal text-white/80">{text.heroEyebrow}</CardDescription>
-                  <CardTitle className="max-w-3xl text-2xl font-semibold tracking-normal lg:text-[28px]">{text.heroTitle}</CardTitle>
-                </CardHeader>
-                <CardContent className="grid gap-4 pt-3 lg:grid-cols-[minmax(0,1fr)_16rem]">
-                  <p className="max-w-2xl text-sm leading-6 text-white/80">{text.heroBody}</p>
-                  <div className="grid gap-2 rounded-lg border border-white/24 bg-white/14 p-2.5 text-xs">
-                    <LegendDot label="Input" tone="input" />
-                    <LegendDot label="Decision" tone="decision" />
-                    <LegendDot label="Method" tone="method" />
-                    <LegendDot label="Tool" tone="tool" />
+              <div className="empty-detail-state">
+              <Card className="empty-hero-card overflow-hidden border-transparent bg-[image:var(--app-hero)] text-white shadow-[var(--app-shadow)]">
+                <CardContent className="empty-hero-grid">
+                  <div className="empty-hero-copy">
+                    <CardDescription className="font-mono uppercase tracking-normal text-white/80">{text.heroEyebrow}</CardDescription>
+                    <CardTitle className="max-w-5xl text-3xl font-semibold tracking-normal md:text-[40px] md:leading-[1.08] xl:text-[46px]">{text.heroTitle}</CardTitle>
+                    <p className="max-w-3xl text-sm leading-6 text-white/82">{text.heroBody}</p>
+                  </div>
+                  <div className="empty-orbit-panel" aria-hidden="true">
+                    <div className="empty-orbit-node empty-orbit-node-primary"><BrainCircuit /></div>
+                    <div className="empty-orbit-node empty-orbit-node-top"><ScanSearch /></div>
+                    <div className="empty-orbit-node empty-orbit-node-right"><Wrench /></div>
+                    <div className="empty-orbit-node empty-orbit-node-bottom"><Route /></div>
+                    <div className="empty-orbit-node empty-orbit-node-left"><FileText /></div>
                   </div>
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader>
+              <Card className="empty-guide-card overflow-hidden">
+                <CardHeader className="empty-guide-header">
                   <CardDescription>{text.emptyEyebrow}</CardDescription>
-                  <CardTitle className="text-xl">{text.emptyTitle}</CardTitle>
-                  <CardDescription>{text.emptyBody}</CardDescription>
+                  <CardTitle className="max-w-3xl text-2xl leading-tight">{text.emptyTitle}</CardTitle>
+                  <CardDescription className="max-w-3xl">{text.emptyBody}</CardDescription>
                 </CardHeader>
-                <CardContent className="grid gap-3 md:grid-cols-3">
-                  {[text.guideDirectory, text.guideSkill, text.guideGraph].map((item, index) => (
-                    <div key={item} className="rounded-lg border bg-muted/30 p-3">
-                      <Badge variant="secondary">{index + 1}</Badge>
-                      <p className="mt-2 text-xs leading-5 text-muted-foreground">{item}</p>
+                <CardContent className="empty-guide-grid">
+                  {[
+                    { item: text.guideDirectory, Icon: ScanSearch },
+                    { item: text.guideSkill, Icon: Target },
+                    { item: text.guideGraph, Icon: Network }
+                  ].map(({ item, Icon }, index) => (
+                    <div key={item} className="empty-guide-item group" data-step={index + 1}>
+                      <div className="empty-guide-icon"><Icon /></div>
+                      <p>{item}</p>
                     </div>
                   ))}
                 </CardContent>
@@ -1410,7 +1440,12 @@ function App() {
               <div className="detail-overview-grid">
                 <Card>
                   <CardHeader>
-                    <CardDescription className="truncate font-mono">{selectedSkill.path}</CardDescription>
+                    <div className="skill-path-row">
+                      <CardDescription className="skill-path-text font-mono" title={selectedSkill.path}>{selectedSkill.path}</CardDescription>
+                      <Button type="button" variant="ghost" size="icon-sm" className="skill-path-copy" aria-label={text.copyPath} title={text.copyPath} onClick={() => copyPathToClipboard(selectedSkill.path)}>
+                        <Copy data-icon="inline-start" />
+                      </Button>
+                    </div>
                     <SectionTitle icon={BrainCircuit} tone="input" className="text-2xl tracking-normal">{selectedSkill.name}</SectionTitle>
                     <CardDescription className="text-[13px] leading-5">{selectedSkill.modelAnalysis?.summary || selectedSkill.analysis.summary}</CardDescription>
                   </CardHeader>
