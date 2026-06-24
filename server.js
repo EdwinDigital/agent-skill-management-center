@@ -5,8 +5,9 @@ import fsSync from "node:fs";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { DatabaseSync } from "node:sqlite";
 import { promisify } from "node:util";
+import { initializeDatabase, seedCurrentDefaultSkillRoot } from "./setup/database.js";
+import { supportedAgentSkillDirectories } from "./setup/default-skill-directories.js";
 
 const app = express();
 const execFileAsync = promisify(execFile);
@@ -34,73 +35,7 @@ const descriptionCandidates = [
   "manifest.json",
   "skill.json"
 ];
-const supportedAgentSkillDirectories = [
-  ["AiderDesk", "aider-desk", ".aider-desk/skills/", "~/.aider-desk/skills/"],
-  ["Amp, Replit, Universal", "amp", ".agents/skills/", "~/.config/agents/skills/"],
-  ["Antigravity", "antigravity", ".agents/skills/", "~/.gemini/antigravity/skills/"],
-  ["Antigravity CLI", "antigravity-cli", ".agents/skills/", "~/.gemini/antigravity-cli/skills/"],
-  ["AstrBot", "astrbot", "data/skills/", "~/.astrbot/data/skills/"],
-  ["Autohand Code CLI", "autohand-code", ".autohand/skills/", "~/.autohand/skills/"],
-  ["Augment", "augment", ".augment/skills/", "~/.augment/skills/"],
-  ["IBM Bob", "bob", ".bob/skills/", "~/.bob/skills/"],
-  ["Claude Code", "claude-code", ".claude/skills/", "~/.claude/skills/"],
-  ["OpenClaw", "openclaw", "skills/", "~/.openclaw/skills/"],
-  ["Cline, Dexto, Kimi Code CLI, Loaf, Warp, Zed", "cline", ".agents/skills/", "~/.agents/skills/"],
-  ["CodeArts Agent", "codearts-agent", ".codeartsdoer/skills/", "~/.codeartsdoer/skills/"],
-  ["CodeBuddy", "codebuddy", ".codebuddy/skills/", "~/.codebuddy/skills/"],
-  ["Codemaker", "codemaker", ".codemaker/skills/", "~/.codemaker/skills/"],
-  ["Code Studio", "codestudio", ".codestudio/skills/", "~/.codestudio/skills/"],
-  ["Codex", "codex", ".agents/skills/", "~/.codex/skills/"],
-  ["Codex Plugins", "codex-plugins", ".codex/plugins/cache/", "~/.codex/plugins/cache/"],
-  ["Command Code", "command-code", ".commandcode/skills/", "~/.commandcode/skills/"],
-  ["Continue", "continue", ".continue/skills/", "~/.continue/skills/"],
-  ["Cortex Code", "cortex", ".cortex/skills/", "~/.snowflake/cortex/skills/"],
-  ["Crush", "crush", ".crush/skills/", "~/.config/crush/skills/"],
-  ["Cursor", "cursor", ".agents/skills/", "~/.cursor/skills/"],
-  ["Deep Agents", "deepagents", ".agents/skills/", "~/.deepagents/agent/skills/"],
-  ["Devin for Terminal", "devin", ".devin/skills/", "~/.config/devin/skills/"],
-  ["Droid", "droid", ".factory/skills/", "~/.factory/skills/"],
-  ["Firebender", "firebender", ".agents/skills/", "~/.firebender/skills/"],
-  ["ForgeCode", "forgecode", ".forge/skills/", "~/.forge/skills/"],
-  ["Gemini CLI", "gemini-cli", ".agents/skills/", "~/.gemini/skills/"],
-  ["GitHub Copilot", "github-copilot", ".agents/skills/", "~/.copilot/skills/"],
-  ["Goose", "goose", ".goose/skills/", "~/.config/goose/skills/"],
-  ["Hermes Agent", "hermes-agent", ".hermes/skills/", "~/.hermes/skills/"],
-  ["inference.sh", "inference-sh", ".inferencesh/skills/", "~/.inferencesh/skills/"],
-  ["Jazz", "jazz", ".jazz/skills/", "~/.jazz/skills/"],
-  ["Junie", "junie", ".junie/skills/", "~/.junie/skills/"],
-  ["iFlow CLI", "iflow-cli", ".iflow/skills/", "~/.iflow/skills/"],
-  ["Kilo Code", "kilo", ".kilocode/skills/", "~/.kilocode/skills/"],
-  ["Kiro CLI", "kiro-cli", ".kiro/skills/", "~/.kiro/skills/"],
-  ["Kode", "kode", ".kode/skills/", "~/.kode/skills/"],
-  ["Lingma", "lingma", ".lingma/skills/", "~/.lingma/skills/"],
-  ["MCPJam", "mcpjam", ".mcpjam/skills/", "~/.mcpjam/skills/"],
-  ["Mistral Vibe", "mistral-vibe", ".vibe/skills/", "~/.vibe/skills/"],
-  ["Moxby", "moxby", ".moxby/skills/", "~/.moxby/skills/"],
-  ["Mux", "mux", ".mux/skills/", "~/.mux/skills/"],
-  ["OpenCode", "opencode", ".agents/skills/", "~/.config/opencode/skills/"],
-  ["OpenHands", "openhands", ".openhands/skills/", "~/.openhands/skills/"],
-  ["Ona", "ona", ".ona/skills/", "~/.ona/skills/"],
-  ["Pi", "pi", ".pi/skills/", "~/.pi/agent/skills/"],
-  ["Qoder", "qoder", ".qoder/skills/", "~/.qoder/skills/"],
-  ["Qoder CN", "qoder-cn", ".qoder/skills/", "~/.qoder-cn/skills/"],
-  ["Qwen Code", "qwen-code", ".qwen/skills/", "~/.qwen/skills/"],
-  ["Reasonix", "reasonix", ".reasonix/skills/", "~/.reasonix/skills/"],
-  ["Rovo Dev", "rovodev", ".rovodev/skills/", "~/.rovodev/skills/"],
-  ["Roo Code", "roo", ".roo/skills/", "~/.roo/skills/"],
-  ["Tabnine CLI", "tabnine-cli", ".tabnine/agent/skills/", "~/.tabnine/agent/skills/"],
-  ["Terramind", "terramind", ".terramind/skills/", "~/.terramind/skills/"],
-  ["Tinycloud", "tinycloud", ".tinycloud/skills/", "~/.tinycloud/skills/"],
-  ["Trae", "trae", ".trae/skills/", "~/.trae/skills/"],
-  ["Trae CN", "trae-cn", ".trae/skills/", "~/.trae-cn/skills/"],
-  ["Windsurf", "windsurf", ".windsurf/skills/", "~/.codeium/windsurf/skills/"],
-  ["Workbuddy Marketplace", "workbuddy-marketplace", ".workbuddy/skills-marketplace/skills/", "~/.workbuddy/skills-marketplace/skills/"],
-  ["Zencoder, Zenflow", "zencoder", ".zencoder/skills/", "~/.zencoder/skills/"],
-  ["Neovate", "neovate", ".neovate/skills/", "~/.neovate/skills/"],
-  ["Pochi", "pochi", ".pochi/skills/", "~/.pochi/skills/"],
-  ["AdaL", "adal", ".adal/skills/", "~/.adal/skills/"]
-];
-const database = initializeDatabase();
+const database = initializeDatabase({ databasePath, defaultSkillRoot, defaultSkillRootDisplayPath });
 
 app.use(express.json({ limit: "2mb" }));
 app.use((error, request, response, next) => {
@@ -604,168 +539,6 @@ const progressMessages = {
   }
 };
 
-function initializeDatabase() {
-  fsSync.mkdirSync(path.dirname(databasePath), { recursive: true });
-  const db = new DatabaseSync(databasePath);
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS skill_model_analyses (
-      skill_name TEXT NOT NULL,
-      skill_path TEXT NOT NULL,
-      model TEXT NOT NULL,
-      language TEXT NOT NULL,
-      content_hash TEXT NOT NULL,
-      analysis_json TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      PRIMARY KEY (skill_path, language)
-    );
-    DROP INDEX IF EXISTS idx_skill_model_analyses_lookup;
-    CREATE INDEX IF NOT EXISTS idx_skill_model_analyses_lookup
-      ON skill_model_analyses (skill_path, language, updated_at);
-    CREATE TABLE IF NOT EXISTS skill_markdown_translations (
-      skill_name TEXT NOT NULL,
-      skill_path TEXT NOT NULL,
-      model TEXT NOT NULL,
-      language TEXT NOT NULL,
-      content_hash TEXT NOT NULL,
-      translated_markdown TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      PRIMARY KEY (skill_path, language)
-    );
-    DROP INDEX IF EXISTS idx_skill_markdown_translations_lookup;
-    CREATE INDEX IF NOT EXISTS idx_skill_markdown_translations_lookup
-      ON skill_markdown_translations (skill_path, language, updated_at);
-    CREATE TABLE IF NOT EXISTS skill_directory_defaults (
-      agent_slug TEXT PRIMARY KEY,
-      agent_name TEXT NOT NULL,
-      project_path TEXT NOT NULL,
-      global_path TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS skill_directory_scan (
-      id TEXT PRIMARY KEY,
-      source_type TEXT NOT NULL,
-      agent_slug TEXT,
-      label TEXT NOT NULL,
-      path TEXT NOT NULL,
-      expanded_path TEXT NOT NULL,
-      exists_on_disk INTEGER NOT NULL DEFAULT 0,
-      removable INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_skill_directory_scan_expanded_path
-      ON skill_directory_scan (expanded_path);
-    CREATE TABLE IF NOT EXISTS skill_directory_index (
-      root_path TEXT NOT NULL,
-      skill_name TEXT NOT NULL,
-      skill_path TEXT NOT NULL,
-      description_file TEXT NOT NULL,
-      summary TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      PRIMARY KEY (root_path, skill_path)
-    );
-    CREATE INDEX IF NOT EXISTS idx_skill_directory_index_root
-      ON skill_directory_index (root_path, skill_name COLLATE NOCASE);
-    CREATE TABLE IF NOT EXISTS app_error_logs (
-      id TEXT PRIMARY KEY,
-      created_at TEXT NOT NULL,
-      level TEXT NOT NULL,
-      scope TEXT NOT NULL,
-      method TEXT,
-      route TEXT,
-      status INTEGER,
-      message TEXT NOT NULL,
-      stack TEXT,
-      details_json TEXT
-    );
-    CREATE INDEX IF NOT EXISTS idx_app_error_logs_created_at
-      ON app_error_logs (created_at DESC);
-    CREATE INDEX IF NOT EXISTS idx_app_error_logs_scope
-      ON app_error_logs (scope, created_at DESC);
-  `);
-  ensureCompositeSkillCacheTables(db);
-  createSkillCacheIndexes(db);
-  seedDefaultSkillDirectories(db);
-  seedCurrentDefaultSkillRoot(db);
-  allowDefaultSkillRootsRemoval(db);
-  return db;
-}
-
-function ensureCompositeSkillCacheTables(db) {
-  ensureCompositeCacheTable(db, {
-    tableName: "skill_model_analyses",
-    contentColumn: "analysis_json",
-    createTableSql: createSkillModelAnalysesTableSql("skill_model_analyses_next")
-  });
-  ensureCompositeCacheTable(db, {
-    tableName: "skill_markdown_translations",
-    contentColumn: "translated_markdown",
-    createTableSql: createSkillMarkdownTranslationsTableSql("skill_markdown_translations_next")
-  });
-}
-
-function createSkillModelAnalysesTableSql(tableName) {
-  return `
-    CREATE TABLE ${tableName} (
-      skill_name TEXT NOT NULL,
-      skill_path TEXT NOT NULL,
-      model TEXT NOT NULL,
-      language TEXT NOT NULL,
-      content_hash TEXT NOT NULL,
-      analysis_json TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      PRIMARY KEY (skill_path, language)
-    )
-  `;
-}
-
-function createSkillMarkdownTranslationsTableSql(tableName) {
-  return `
-    CREATE TABLE ${tableName} (
-      skill_name TEXT NOT NULL,
-      skill_path TEXT NOT NULL,
-      model TEXT NOT NULL,
-      language TEXT NOT NULL,
-      content_hash TEXT NOT NULL,
-      translated_markdown TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      PRIMARY KEY (skill_path, language)
-    )
-  `;
-}
-
-function ensureCompositeCacheTable(db, { tableName, contentColumn, createTableSql }) {
-  const columns = db.prepare(`PRAGMA table_info(${tableName})`).all();
-  const primaryKeyColumns = columns
-    .filter((column) => column.pk > 0)
-    .sort((left, right) => left.pk - right.pk)
-    .map((column) => column.name);
-  const hasCompositePrimaryKey = primaryKeyColumns.join("|") === "skill_path|language";
-  if (hasCompositePrimaryKey) {
-    return;
-  }
-
-  const nextTableName = `${tableName}_next`;
-  db.exec(`DROP TABLE IF EXISTS ${nextTableName}; ${createTableSql}; DROP TABLE IF EXISTS ${tableName}; ALTER TABLE ${nextTableName} RENAME TO ${tableName};`);
-}
-
-function createSkillCacheIndexes(db) {
-  db.exec(`
-    DROP INDEX IF EXISTS idx_skill_model_analyses_lookup;
-    CREATE INDEX idx_skill_model_analyses_lookup
-      ON skill_model_analyses (skill_path, language, updated_at);
-    DROP INDEX IF EXISTS idx_skill_markdown_translations_lookup;
-    CREATE INDEX idx_skill_markdown_translations_lookup
-      ON skill_markdown_translations (skill_path, language, updated_at);
-  `);
-}
-
 function sendJsonError(response, request, status, error, options = {}) {
   const message = options.message || errorMessage(error);
   const authGuide = error?.authGuide || (isCopilotSdkAuthError(error) ? buildGitHubAuthGuide({ authenticated: false, needsCopilotScope: false, cliInstalled: true, tokenAvailable: false }) : null);
@@ -839,39 +612,6 @@ function safeJsonParse(value) {
   } catch {
     return null;
   }
-}
-
-function seedDefaultSkillDirectories(db) {
-  const now = new Date().toISOString();
-  const statement = db.prepare(`
-    INSERT INTO skill_directory_defaults (agent_slug, agent_name, project_path, global_path, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?)
-    ON CONFLICT(agent_slug) DO UPDATE SET
-      agent_name = excluded.agent_name,
-      project_path = excluded.project_path,
-      global_path = excluded.global_path,
-      updated_at = excluded.updated_at
-  `);
-  for (const [agentName, agentSlug, projectPath, globalPath] of supportedAgentSkillDirectories) {
-    statement.run(agentSlug, agentName, projectPath, globalPath, now, now);
-  }
-}
-
-function seedCurrentDefaultSkillRoot(db) {
-  if (!directoryExists(defaultSkillRoot)) {
-    return;
-  }
-  upsertScannedSkillRoot(db, {
-    sourceType: "default",
-    agentSlug: "current-default",
-    label: "Skills.sh",
-    value: defaultSkillRootDisplayPath,
-    removable: true
-  });
-}
-
-function allowDefaultSkillRootsRemoval(db) {
-  db.prepare("UPDATE skill_directory_scan SET removable = 1 WHERE source_type = 'default'").run();
 }
 
 function listScannedSkillRoots() {
@@ -962,7 +702,7 @@ function scanDefaultSkillRoots() {
       added += 1;
     }
   }
-  seedCurrentDefaultSkillRoot(database);
+  seedCurrentDefaultSkillRoot(database, { defaultSkillRoot, defaultSkillRootDisplayPath });
 
   return { scanned: defaults.length, found, added };
 }
