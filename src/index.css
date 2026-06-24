@@ -253,14 +253,16 @@
   }
 
   .sidebar-primary-action {
-    min-height: 2.4rem;
+    height: 2.15rem;
+    min-height: 2.15rem;
     justify-content: center;
     border: 1px solid color-mix(in srgb, var(--primary) 38%, transparent);
     background: var(--app-hero);
-    padding: 0.425rem 0.75rem;
+    padding: 0.3rem 0.75rem;
     color: var(--primary-foreground);
     font-size: 0.8125rem;
     font-weight: 700;
+    line-height: 1.25rem;
     box-shadow: 0 10px 24px rgba(0, 120, 212, 0.24), 0 8px 22px rgba(192, 59, 196, 0.12);
   }
 
