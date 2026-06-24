@@ -1403,11 +1403,23 @@ function App() {
                     <p className="max-w-3xl text-sm leading-6 text-white/82">{text.heroBody}</p>
                   </div>
                   <div className="empty-orbit-panel" aria-hidden="true">
-                    <div className="empty-orbit-node empty-orbit-node-primary"><BrainCircuit /></div>
-                    <div className="empty-orbit-node empty-orbit-node-top"><ScanSearch /></div>
-                    <div className="empty-orbit-node empty-orbit-node-right"><Wrench /></div>
-                    <div className="empty-orbit-node empty-orbit-node-bottom"><Route /></div>
-                    <div className="empty-orbit-node empty-orbit-node-left"><FileText /></div>
+                    <div className="empty-flow-demo">
+                      <div className="empty-flow-source">
+                        <FolderOpen />
+                        <span>Skills/</span>
+                      </div>
+                      <div className="empty-flow-files">
+                        <span><FileText /> SKILL.md</span>
+                        <span><FileCode2 /> tools.json</span>
+                        <span><FileText /> refs.md</span>
+                      </div>
+                      <div className="empty-flow-stream" />
+                      <div className="empty-flow-graph">
+                        <span className="empty-flow-node empty-flow-node-a">Intent</span>
+                        <span className="empty-flow-node empty-flow-node-b">Tools</span>
+                        <span className="empty-flow-node empty-flow-node-c">Flow</span>
+                      </div>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
