@@ -12,6 +12,7 @@ const app = express();
 const execFileAsync = promisify(execFile);
 const port = Number(process.env.PORT || 4173);
 const defaultSkillRoot = process.env.SKILL_ROOT || path.join(os.homedir(), ".agents", "skills");
+const defaultSkillRootDisplayPath = process.env.SKILL_ROOT ? defaultSkillRoot : "~/.agents/skills/";
 const defaultDatabasePath = "data/analysis.sqlite";
 const databasePath = resolveProjectPath(process.env.SKILL_ANALYSIS_DB || defaultDatabasePath);
 const analysisSchemaVersion = "logic-map-value-insight-sections-v3";
@@ -50,6 +51,7 @@ const supportedAgentSkillDirectories = [
   ["Codemaker", "codemaker", ".codemaker/skills/", "~/.codemaker/skills/"],
   ["Code Studio", "codestudio", ".codestudio/skills/", "~/.codestudio/skills/"],
   ["Codex", "codex", ".agents/skills/", "~/.codex/skills/"],
+  ["Codex Plugins", "codex-plugins", ".codex/plugins/cache/", "~/.codex/plugins/cache/"],
   ["Command Code", "command-code", ".commandcode/skills/", "~/.commandcode/skills/"],
   ["Continue", "continue", ".continue/skills/", "~/.continue/skills/"],
   ["Cortex Code", "cortex", ".cortex/skills/", "~/.snowflake/cortex/skills/"],
@@ -92,6 +94,7 @@ const supportedAgentSkillDirectories = [
   ["Trae", "trae", ".trae/skills/", "~/.trae/skills/"],
   ["Trae CN", "trae-cn", ".trae/skills/", "~/.trae-cn/skills/"],
   ["Windsurf", "windsurf", ".windsurf/skills/", "~/.codeium/windsurf/skills/"],
+  ["Workbuddy Marketplace", "workbuddy-marketplace", ".workbuddy/skills-marketplace/skills/", "~/.workbuddy/skills-marketplace/skills/"],
   ["Zencoder, Zenflow", "zencoder", ".zencoder/skills/", "~/.zencoder/skills/"],
   ["Neovate", "neovate", ".neovate/skills/", "~/.neovate/skills/"],
   ["Pochi", "pochi", ".pochi/skills/", "~/.pochi/skills/"],
@@ -688,6 +691,7 @@ function initializeDatabase() {
   createSkillCacheIndexes(db);
   seedDefaultSkillDirectories(db);
   seedCurrentDefaultSkillRoot(db);
+  allowDefaultSkillRootsRemoval(db);
   return db;
 }
 
@@ -860,10 +864,14 @@ function seedCurrentDefaultSkillRoot(db) {
   upsertScannedSkillRoot(db, {
     sourceType: "default",
     agentSlug: "current-default",
-    label: "Default skills",
-    value: defaultSkillRoot,
-    removable: false
+    label: "Skills.sh",
+    value: defaultSkillRootDisplayPath,
+    removable: true
   });
+}
+
+function allowDefaultSkillRootsRemoval(db) {
+  db.prepare("UPDATE skill_directory_scan SET removable = 1 WHERE source_type = 'default'").run();
 }
 
 function listScannedSkillRoots() {
@@ -948,7 +956,7 @@ function scanDefaultSkillRoots() {
       agentSlug: item.agent_slug,
       label: item.agent_name,
       value: item.global_path,
-      removable: false
+      removable: true
     });
     if (changed) {
       added += 1;
