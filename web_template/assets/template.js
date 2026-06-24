@@ -1,9 +1,15 @@
-const PRIVACY_MODE_KEY = "templatePrivacyMode";
-const THEME_KEY = "templateTheme";
+const STORAGE_KEYS = {
+  privacyMode: "templatePrivacyMode",
+  theme: "templateTheme",
+  sidebarCollapsed: "templateSidebarCollapsed",
+  rightPanelCollapsed: "templateRightPanelCollapsed",
+};
 
 const state = {
-  privacyMode: localStorage.getItem(PRIVACY_MODE_KEY) === "1",
-  theme: localStorage.getItem(THEME_KEY) || "dark",
+  privacyMode: localStorage.getItem(STORAGE_KEYS.privacyMode) === "1",
+  theme: localStorage.getItem(STORAGE_KEYS.theme) || "dark",
+  sidebarCollapsed: localStorage.getItem(STORAGE_KEYS.sidebarCollapsed) === "1",
+  rightPanelCollapsed: localStorage.getItem(STORAGE_KEYS.rightPanelCollapsed) !== "0",
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -12,42 +18,50 @@ const $$ = (selector) => [...document.querySelectorAll(selector)];
 function applyTheme(theme) {
   state.theme = theme === "light" ? "light" : "dark";
   document.body.classList.toggle("theme-dark", state.theme === "dark");
-  localStorage.setItem(THEME_KEY, state.theme);
+  localStorage.setItem(STORAGE_KEYS.theme, state.theme);
+}
+
+function applyShellState() {
+  const shell = $(".app-shell");
+  const rightPanel = $(".right-panel");
+  if (!shell || !rightPanel) return;
+
+  shell.dataset.sidebarCollapsed = state.sidebarCollapsed ? "true" : "false";
+  shell.dataset.rightPanelCollapsed = state.rightPanelCollapsed ? "true" : "false";
+  rightPanel.classList.toggle("is-collapsed", state.rightPanelCollapsed);
+
+  $("#sidebar-toggle")?.setAttribute("aria-expanded", state.sidebarCollapsed ? "false" : "true");
+  $("#sidebar-expand")?.setAttribute("aria-expanded", state.sidebarCollapsed ? "false" : "true");
+  $("#right-panel-toggle")?.setAttribute("aria-expanded", state.rightPanelCollapsed ? "false" : "true");
+  $("#right-panel-expand")?.setAttribute("aria-expanded", state.rightPanelCollapsed ? "false" : "true");
+  $("#right-panel-collapse")?.setAttribute("aria-expanded", state.rightPanelCollapsed ? "false" : "true");
+}
+
+function setSidebarCollapsed(collapsed) {
+  state.sidebarCollapsed = Boolean(collapsed);
+  localStorage.setItem(STORAGE_KEYS.sidebarCollapsed, state.sidebarCollapsed ? "1" : "0");
+  applyShellState();
+}
+
+function setRightPanelCollapsed(collapsed) {
+  state.rightPanelCollapsed = Boolean(collapsed);
+  localStorage.setItem(STORAGE_KEYS.rightPanelCollapsed, state.rightPanelCollapsed ? "1" : "0");
+  applyShellState();
 }
 
 function mask(value) {
   return state.privacyMode ? "***" : value;
 }
 
-function money(value) {
-  if (state.privacyMode) return "***";
-  const amount = Math.abs(Number(value || 0));
-  const sign = Number(value || 0) < 0 ? "-" : "";
-  if (amount >= 1e6) return `${sign}$${(amount / 1e6).toFixed(2)}M`;
-  if (amount >= 1e3) return `${sign}$${(amount / 1e3).toFixed(1)}K`;
-  return `${sign}$${amount.toFixed(0)}`;
-}
-
-function pct(value) {
-  if (state.privacyMode) return "***";
-  return value === null || value === undefined ? "n/a" : `${Number(value) >= 0 ? "+" : ""}${(Number(value) * 100).toFixed(1)}%`;
-}
-
-function togglePrivacy() {
-  state.privacyMode = !state.privacyMode;
+function togglePrivacy(force) {
+  state.privacyMode = typeof force === "boolean" ? force : !state.privacyMode;
   document.body.classList.toggle("privacy-mode", state.privacyMode);
-  localStorage.setItem(PRIVACY_MODE_KEY, state.privacyMode ? "1" : "0");
-  renderDemoValues();
+  localStorage.setItem(STORAGE_KEYS.privacyMode, state.privacyMode ? "1" : "0");
+  renderSensitiveValues();
 }
 
-function renderDemoValues() {
-  $$("[data-money]").forEach((element) => {
-    element.textContent = money(element.dataset.money);
-  });
-  $$("[data-pct]").forEach((element) => {
-    element.textContent = pct(element.dataset.pct);
-  });
-  $$("[data-sensitive]").forEach((element) => {
+function renderSensitiveValues() {
+  $$('[data-sensitive]').forEach((element) => {
     element.textContent = mask(element.dataset.sensitive);
   });
   const privacyButton = $("#privacy-toggle");
@@ -55,22 +69,45 @@ function renderDemoValues() {
     privacyButton.setAttribute("aria-pressed", state.privacyMode ? "true" : "false");
     privacyButton.classList.toggle("is-active", state.privacyMode);
   }
+  const privacySetting = $("#privacy-setting");
+  if (privacySetting) {
+    privacySetting.value = state.privacyMode ? "开启" : "关闭";
+  }
+}
+
+function openDialog(dialog) {
+  dialog?.classList.add("is-open");
+  dialog?.setAttribute("aria-hidden", "false");
+}
+
+function closeDialog(dialog) {
+  dialog?.classList.remove("is-open");
+  dialog?.setAttribute("aria-hidden", "true");
 }
 
 function bindTemplateEvents() {
   $("#theme-toggle")?.addEventListener("click", () => {
     applyTheme(state.theme === "dark" ? "light" : "dark");
   });
-  $("#privacy-toggle")?.addEventListener("click", togglePrivacy);
-  $("#sidebar-toggle")?.addEventListener("click", () => {
-    document.body.classList.toggle("sidebar-collapsed");
+  $("#privacy-toggle")?.addEventListener("click", () => togglePrivacy());
+  $("#sidebar-toggle")?.addEventListener("click", () => setSidebarCollapsed(true));
+  $("#sidebar-expand")?.addEventListener("click", () => setSidebarCollapsed(false));
+  $("#right-panel-toggle")?.addEventListener("click", () => setRightPanelCollapsed(!state.rightPanelCollapsed));
+  $("#right-panel-expand")?.addEventListener("click", () => setRightPanelCollapsed(false));
+  $("#right-panel-collapse")?.addEventListener("click", () => setRightPanelCollapsed(true));
+
+  const settingsDialog = $("#settings-dialog");
+  $("#settings-open")?.addEventListener("click", () => openDialog(settingsDialog));
+  $$('[data-dialog-close]').forEach((element) => {
+    element.addEventListener("click", () => closeDialog(settingsDialog));
   });
-  $("#assistant-toggle")?.addEventListener("click", () => {
-    document.body.classList.toggle("assistant-collapsed");
+  $("#settings-save")?.addEventListener("click", () => {
+    togglePrivacy($("#privacy-setting")?.value === "开启");
+    closeDialog(settingsDialog);
   });
 }
 
 applyTheme(state.theme);
-document.body.classList.toggle("privacy-mode", state.privacyMode);
+applyShellState();
+togglePrivacy(state.privacyMode);
 bindTemplateEvents();
-renderDemoValues();

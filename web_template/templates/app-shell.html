@@ -3,80 +3,148 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Web 应用模板</title>
+  <title>开发者控制台模板</title>
   <link rel="stylesheet" href="../assets/design-tokens.css">
   <link rel="stylesheet" href="../assets/components.css">
 </head>
-<body class="theme-dark assistant-collapsed">
+<body class="theme-dark">
   <header class="app-header">
     <div class="app-title-block">
       <div class="app-mark" aria-hidden="true">▦</div>
       <div>
-        <div class="app-kicker">WORKSTATION</div>
-        <h1>Web 应用模板</h1>
+        <h1>开发者控制台模板</h1>
       </div>
     </div>
     <div class="app-actions">
-      <button id="theme-toggle" class="icon-button" type="button" aria-label="切换主题">☾</button>
+      <button id="theme-toggle" class="icon-button" type="button" aria-label="切换主题" title="切换主题">☾</button>
+      <button id="settings-open" class="icon-button" type="button" aria-label="打开设置" title="打开设置">⚙</button>
+      <button class="user-menu-button" type="button" aria-haspopup="menu" aria-expanded="false" title="用户菜单">
+        <span class="avatar" aria-hidden="true">GH</span>
+        <span>GitHub</span>
+      </button>
     </div>
   </header>
 
-  <div class="app-shell">
-    <aside class="sidebar">
-      <button id="sidebar-toggle" class="sidebar-toggle" type="button" aria-label="折叠侧边栏" aria-expanded="true">‹</button>
-      <div class="rail-hint left" aria-hidden="true">数据管理</div>
-      <section class="card" style="padding: 16px;">
-        <strong>数据管理</strong>
-        <p style="color: var(--side-muted); margin-bottom: 0;">放置版本、搜索、筛选和上传控件。</p>
-      </section>
+  <div class="app-shell" data-sidebar-collapsed="false" data-right-panel-collapsed="true">
+    <aside class="left-menu" aria-label="Skill 管理">
+      <button id="sidebar-expand" class="rail-button left" type="button" aria-label="展开左侧菜单" title="展开左侧菜单" aria-expanded="false">
+        <span aria-hidden="true">☰</span>
+        <span class="rail-label">Skill管理</span>
+      </button>
+      <div class="menu-content" data-menu-content="left">
+        <div class="menu-heading">
+          <strong>Skill 管理</strong>
+          <button id="sidebar-toggle" class="icon-button" type="button" aria-label="折叠左侧菜单" title="折叠左侧菜单" aria-expanded="true">‹</button>
+        </div>
+        <section class="card control-card">
+          <div class="card-header-row">
+            <strong>目录来源</strong>
+            <span class="badge">3 roots</span>
+          </div>
+          <label class="field-label" for="skill-root">Skill 根目录</label>
+          <select id="skill-root" class="control-input">
+            <option>~/.agents/skills</option>
+            <option>~/.copilot/skills</option>
+          </select>
+          <div class="button-row">
+            <button class="button outline" type="button">选择目录</button>
+            <button class="button outline" type="button">重新扫描</button>
+          </div>
+        </section>
+        <section class="card control-card">
+          <label class="field-label" for="skill-search">搜索 Skill</label>
+          <input id="skill-search" class="control-input" value="frontend" aria-label="搜索 Skill">
+          <div class="skill-list" role="listbox" aria-label="Skill 列表">
+            <button class="skill-row is-selected" type="button" role="option" aria-selected="true">
+              <span class="text-fade">frontend-design</span>
+              <span class="badge secondary">design</span>
+            </button>
+            <button class="skill-row" type="button" role="option" aria-selected="false">
+              <span class="text-fade">agent-customization</span>
+              <span class="badge secondary">workflow</span>
+            </button>
+          </div>
+        </section>
+      </div>
     </aside>
 
     <main class="main">
-      <div class="customer-name-row">
-        <h2 style="margin: 0;">客户或工作区名称</h2>
-        <button id="privacy-toggle" class="privacy-toggle" type="button" aria-pressed="false" aria-label="隐私模式">◉</button>
-      </div>
-      <p style="color: var(--muted); margin-top: 4px;">TPID <span data-sensitive="82281336">82281336</span> · <span data-sensitive="118">118</span> 行明细</p>
-
-      <section class="hero-summary">
+      <section class="workspace-title">
         <div>
-          <div class="eyebrow">Overview</div>
-          <h1>业务摘要区域</h1>
-          <div class="chips">
-            <span class="chip">AE: Demo</span>
-            <span class="chip">ATS: Demo</span>
+          <p class="eyebrow">LOCAL-FIRST AGENT SKILLS CONSOLE</p>
+          <h2>Skill 设计与评估工作台</h2>
+          <p class="muted">扫描本地 Skill，阅读定义，查看规则分析，并在右侧保留上下文详情。</p>
+        </div>
+        <button id="privacy-toggle" class="privacy-toggle" type="button" aria-pressed="false" aria-label="隐私模式" title="隐私模式">◉</button>
+      </section>
+
+      <section class="grid detail-triple-grid">
+        <article class="card metric-card"><span class="metric-label">已扫描 Skills</span><strong data-sensitive="128">128</strong><span class="muted">来自 3 个本地目录</span></article>
+        <article class="card metric-card"><span class="metric-label">AI 评估缓存</span><strong data-sensitive="42">42</strong><span class="muted">按模型和内容哈希复用</span></article>
+        <article class="card metric-card"><span class="metric-label">当前语言</span><strong>中文</strong><span class="muted">Settings 管理全局偏好</span></article>
+      </section>
+
+      <section class="grid detail-pair-grid">
+        <article class="card panel-card">
+          <div class="card-header-row">
+            <strong>规则分析</strong>
+            <span class="badge">ready</span>
           </div>
-        </div>
-        <div class="hero-stats">
-          <div class="hero-stat"><div class="hero-label">订阅数</div><div class="hero-value" data-sensitive="48">48</div></div>
-          <div class="hero-stat"><div class="hero-label">当前范围</div><div class="hero-value" data-money="7460000">$7.46M</div></div>
-        </div>
-      </section>
-
-      <section class="grid kpi-grid">
-        <div class="card kpi"><div class="kpi-label">当月预测量</div><div class="kpi-value" data-money="7460000">$7.46M</div></div>
-        <div class="card kpi"><div class="kpi-label">MoM</div><div class="kpi-value up" data-pct="0.294">+29.4%</div></div>
-        <div class="card kpi"><div class="kpi-label">Top 服务</div><div class="kpi-value" data-pct="0.42">42%</div></div>
-      </section>
-
-      <section class="card" style="padding: 18px;">
-        <div class="barrow">
-          <div class="barname" title="AZURE-HK-HKTEAM-SHINY-PRD">AZURE-HK-HKTEAM-SHINY-PRD</div>
-          <div class="track"><div class="fill" style="width: 80%;"></div></div>
-          <div class="num" data-money="5400000">$5.40M</div>
-          <div class="delta up" data-pct="0.285">+28.5%</div>
-        </div>
+          <p>触发词、工具、方法和文件统计在主内容区呈现，避免被设置或侧栏组件耦合。</p>
+        </article>
+        <article class="card panel-card">
+          <div class="card-header-row">
+            <strong>逻辑图</strong>
+            <button id="right-panel-toggle" class="button outline" type="button" aria-expanded="false">展开详情</button>
+          </div>
+          <p>右侧菜单用于查看 Skill.md、文件树、翻译结果和 AI 洞察。</p>
+        </article>
       </section>
     </main>
 
-    <aside class="assistant-sidebar">
-      <button id="assistant-toggle" class="assistant-toggle" type="button" aria-label="折叠助手栏" aria-expanded="false">›</button>
-      <div class="rail-hint right" aria-hidden="true">智能洞察</div>
-      <section class="card" style="padding: 16px;">
-        <strong>智能洞察</strong>
-        <p style="color: var(--side-muted);">放置 Copilot / Agent 对话区域。</p>
-      </section>
+    <aside class="right-panel is-collapsed" aria-label="Skill 定义详情">
+      <button id="right-panel-expand" class="rail-button right" type="button" aria-label="展开右侧菜单" title="展开右侧菜单" aria-expanded="false">
+        <span aria-hidden="true">›</span>
+        <span class="rail-label">Skill定义详情</span>
+      </button>
+      <div class="right-panel-card card" data-menu-content="right">
+        <div class="card-header-row">
+          <strong>Skill 定义详情</strong>
+          <button id="right-panel-collapse" class="icon-button" type="button" aria-label="折叠右侧菜单" title="折叠右侧菜单" aria-expanded="true">›</button>
+        </div>
+        <div class="tabs" role="tablist" aria-label="Skill 定义详情">
+          <button class="tab is-active" type="button" role="tab" aria-selected="true">SKILL.md</button>
+          <button class="tab" type="button" role="tab" aria-selected="false">文件树</button>
+        </div>
+        <div class="markdown-preview">
+          <h3>frontend-design</h3>
+          <p>Guidance for distinctive, intentional visual design when building new UI or reshaping an existing one.</p>
+          <code>Use semantic tokens, compact cards, and controlled side panels.</code>
+        </div>
+      </div>
     </aside>
+  </div>
+
+  <div id="settings-dialog" class="dialog-root" aria-hidden="true">
+    <div class="dialog-overlay" data-dialog-close></div>
+    <section class="dialog-content" role="dialog" aria-modal="true" aria-labelledby="settings-title" aria-describedby="settings-description">
+      <div class="dialog-header">
+        <h2 id="settings-title">用户设置</h2>
+        <p id="settings-description">全局偏好集中在设置中管理，不与导航或业务组件耦合。</p>
+      </div>
+      <div class="settings-grid">
+        <label class="field-label" for="display-language">显示语言</label>
+        <select id="display-language" class="control-input"><option>中文</option><option>English</option></select>
+        <label class="field-label" for="default-model">默认模型</label>
+        <select id="default-model" class="control-input"><option>gpt-4.1</option><option>gpt-5-mini</option></select>
+        <label class="field-label" for="privacy-setting">隐私模式</label>
+        <select id="privacy-setting" class="control-input"><option>关闭</option><option>开启</option></select>
+      </div>
+      <div class="dialog-footer">
+        <button class="button outline" type="button" data-dialog-close>取消</button>
+        <button id="settings-save" class="button primary" type="button">保存设置</button>
+      </div>
+    </section>
   </div>
 
   <script src="../assets/template.js"></script>
