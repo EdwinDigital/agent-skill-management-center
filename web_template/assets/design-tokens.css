@@ -23,7 +23,7 @@
   --app-header-height: 54px;
   --left-menu-width: clamp(16rem, 44vw, 21.25rem);
   --rail-width: 2.5rem;
-  --right-panel-width: min(42rem, calc(100vw - 2rem));
+  --skill-doc-panel-width: min(42rem, calc(100vw - 2rem));
 }
 
 body.theme-dark {
@@ -83,11 +83,11 @@ button {
   grid-template-columns: var(--rail-width) minmax(0, 1fr);
 }
 
-.app-shell[data-right-panel-collapsed="true"] {
+.app-shell[data-skill-doc-collapsed="true"] {
   grid-template-columns: var(--left-menu-width) minmax(0, 1fr) var(--rail-width);
 }
 
-.app-shell[data-sidebar-collapsed="true"][data-right-panel-collapsed="true"] {
+.app-shell[data-sidebar-collapsed="true"][data-skill-doc-collapsed="true"] {
   grid-template-columns: var(--rail-width) minmax(0, 1fr) var(--rail-width);
 }
 

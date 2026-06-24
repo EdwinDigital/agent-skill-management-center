@@ -1,40 +1,38 @@
 const STORAGE_KEYS = {
-  privacyMode: "templatePrivacyMode",
   theme: "templateTheme",
   sidebarCollapsed: "templateSidebarCollapsed",
-  rightPanelCollapsed: "templateRightPanelCollapsed",
+  skillDocCollapsed: "templateSkillDocCollapsed",
 };
 
 const state = {
-  privacyMode: localStorage.getItem(STORAGE_KEYS.privacyMode) === "1",
-  theme: localStorage.getItem(STORAGE_KEYS.theme) || "dark",
+  theme: localStorage.getItem(STORAGE_KEYS.theme) || "light",
   sidebarCollapsed: localStorage.getItem(STORAGE_KEYS.sidebarCollapsed) === "1",
-  rightPanelCollapsed: localStorage.getItem(STORAGE_KEYS.rightPanelCollapsed) !== "0",
+  skillDocCollapsed: localStorage.getItem(STORAGE_KEYS.skillDocCollapsed) !== "0",
 };
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 
 function applyTheme(theme) {
-  state.theme = theme === "light" ? "light" : "dark";
+  state.theme = theme === "dark" ? "dark" : "light";
   document.body.classList.toggle("theme-dark", state.theme === "dark");
   localStorage.setItem(STORAGE_KEYS.theme, state.theme);
 }
 
 function applyShellState() {
   const shell = $(".app-shell");
-  const rightPanel = $(".right-panel");
-  if (!shell || !rightPanel) return;
+  const skillDocPanel = $(".skill-doc-panel");
+  if (!shell || !skillDocPanel) return;
 
   shell.dataset.sidebarCollapsed = state.sidebarCollapsed ? "true" : "false";
-  shell.dataset.rightPanelCollapsed = state.rightPanelCollapsed ? "true" : "false";
-  rightPanel.classList.toggle("is-collapsed", state.rightPanelCollapsed);
+  shell.dataset.skillDocCollapsed = state.skillDocCollapsed ? "true" : "false";
+  skillDocPanel.classList.toggle("is-collapsed", state.skillDocCollapsed);
 
   $("#sidebar-toggle")?.setAttribute("aria-expanded", state.sidebarCollapsed ? "false" : "true");
   $("#sidebar-expand")?.setAttribute("aria-expanded", state.sidebarCollapsed ? "false" : "true");
-  $("#right-panel-toggle")?.setAttribute("aria-expanded", state.rightPanelCollapsed ? "false" : "true");
-  $("#right-panel-expand")?.setAttribute("aria-expanded", state.rightPanelCollapsed ? "false" : "true");
-  $("#right-panel-collapse")?.setAttribute("aria-expanded", state.rightPanelCollapsed ? "false" : "true");
+  $("#skill-doc-toggle")?.setAttribute("aria-expanded", state.skillDocCollapsed ? "false" : "true");
+  $("#skill-doc-expand")?.setAttribute("aria-expanded", state.skillDocCollapsed ? "false" : "true");
+  $("#skill-doc-collapse")?.setAttribute("aria-expanded", state.skillDocCollapsed ? "false" : "true");
 }
 
 function setSidebarCollapsed(collapsed) {
@@ -43,36 +41,10 @@ function setSidebarCollapsed(collapsed) {
   applyShellState();
 }
 
-function setRightPanelCollapsed(collapsed) {
-  state.rightPanelCollapsed = Boolean(collapsed);
-  localStorage.setItem(STORAGE_KEYS.rightPanelCollapsed, state.rightPanelCollapsed ? "1" : "0");
+function setSkillDocCollapsed(collapsed) {
+  state.skillDocCollapsed = Boolean(collapsed);
+  localStorage.setItem(STORAGE_KEYS.skillDocCollapsed, state.skillDocCollapsed ? "1" : "0");
   applyShellState();
-}
-
-function mask(value) {
-  return state.privacyMode ? "***" : value;
-}
-
-function togglePrivacy(force) {
-  state.privacyMode = typeof force === "boolean" ? force : !state.privacyMode;
-  document.body.classList.toggle("privacy-mode", state.privacyMode);
-  localStorage.setItem(STORAGE_KEYS.privacyMode, state.privacyMode ? "1" : "0");
-  renderSensitiveValues();
-}
-
-function renderSensitiveValues() {
-  $$('[data-sensitive]').forEach((element) => {
-    element.textContent = mask(element.dataset.sensitive);
-  });
-  const privacyButton = $("#privacy-toggle");
-  if (privacyButton) {
-    privacyButton.setAttribute("aria-pressed", state.privacyMode ? "true" : "false");
-    privacyButton.classList.toggle("is-active", state.privacyMode);
-  }
-  const privacySetting = $("#privacy-setting");
-  if (privacySetting) {
-    privacySetting.value = state.privacyMode ? "开启" : "关闭";
-  }
 }
 
 function openDialog(dialog) {
@@ -89,25 +61,20 @@ function bindTemplateEvents() {
   $("#theme-toggle")?.addEventListener("click", () => {
     applyTheme(state.theme === "dark" ? "light" : "dark");
   });
-  $("#privacy-toggle")?.addEventListener("click", () => togglePrivacy());
   $("#sidebar-toggle")?.addEventListener("click", () => setSidebarCollapsed(true));
   $("#sidebar-expand")?.addEventListener("click", () => setSidebarCollapsed(false));
-  $("#right-panel-toggle")?.addEventListener("click", () => setRightPanelCollapsed(!state.rightPanelCollapsed));
-  $("#right-panel-expand")?.addEventListener("click", () => setRightPanelCollapsed(false));
-  $("#right-panel-collapse")?.addEventListener("click", () => setRightPanelCollapsed(true));
+  $("#skill-doc-toggle")?.addEventListener("click", () => setSkillDocCollapsed(!state.skillDocCollapsed));
+  $("#skill-doc-expand")?.addEventListener("click", () => setSkillDocCollapsed(false));
+  $("#skill-doc-collapse")?.addEventListener("click", () => setSkillDocCollapsed(true));
 
   const settingsDialog = $("#settings-dialog");
   $("#settings-open")?.addEventListener("click", () => openDialog(settingsDialog));
   $$('[data-dialog-close]').forEach((element) => {
     element.addEventListener("click", () => closeDialog(settingsDialog));
   });
-  $("#settings-save")?.addEventListener("click", () => {
-    togglePrivacy($("#privacy-setting")?.value === "开启");
-    closeDialog(settingsDialog);
-  });
+  $("#settings-save")?.addEventListener("click", () => closeDialog(settingsDialog));
 }
 
 applyTheme(state.theme);
 applyShellState();
-togglePrivacy(state.privacyMode);
 bindTemplateEvents();

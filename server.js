@@ -21,6 +21,8 @@ const fallbackModels = [
 const progressStore = new Map();
 const progressTtlMs = 10 * 60 * 1000;
 const maxFileBytes = 220_000;
+const skillManifestFileName = "SKILL.md";
+const skillIndexMaxDepth = 10;
 const descriptionCandidates = [
   "SKILL.md",
   "skill.md",
@@ -143,8 +145,10 @@ app.get("/api/skill-roots", (_request, response) => {
 
 app.post("/api/skill-roots/scan", (_request, response) => {
   const result = scanDefaultSkillRoots();
+  const skillIndex = refreshSkillIndexesForKnownRoots();
   response.json({
     ...result,
+    skillIndex,
     roots: listScannedSkillRoots()
   });
 });
@@ -160,9 +164,9 @@ app.post("/api/skill-roots/pick-local", async (request, response) => {
 });
 
 app.post("/api/skill-roots/custom", (request, response) => {
-  const { label, value, type } = request.body || {};
+  const { label, value, type, language } = request.body || {};
   try {
-    const root = addCustomSkillRoot({ label, value, type });
+    const root = addCustomSkillRoot({ label, value, type, language: normalizeLanguage(language) });
     response.json({ root, roots: listScannedSkillRoots() });
   } catch (error) {
     sendJsonError(response, request, 400, error, { scope: "skill-root-custom", details: { label, value, type } });
@@ -189,13 +193,13 @@ app.get("/api/skills/:name", async (request, response) => {
   const root = resolveRequestedRoot(request.query.root);
   const language = normalizeLanguage(request.query.language);
   const skillName = path.basename(request.params.name);
-  const skillPath = path.join(root, skillName);
+  const skillPath = resolveRequestedSkillPath(root, skillName, request.query.path);
 
   try {
-    const skill = await readSkill(skillPath, skillName, language);
+    const skill = await readSkill(skillPath, path.basename(skillPath), language);
     response.json({ root, skill });
   } catch (error) {
-    sendJsonError(response, request, 400, error, { scope: "skill-detail", details: { root, skillName }, payload: { root, skillName } });
+    sendJsonError(response, request, 400, error, { scope: "skill-detail", details: { root, skillName, skillPath }, payload: { root, skillName } });
   }
 });
 
@@ -298,7 +302,7 @@ app.post("/api/analyze-skill", async (request, response) => {
           content: reply?.data?.content || "No model response was returned."
         });
       } finally {
-        await disconnectCopilotSession(session);
+        await cleanupCopilotSession(client, session);
       }
     } finally {
       await stopCopilotClient(client);
@@ -651,6 +655,18 @@ function initializeDatabase() {
     );
     CREATE UNIQUE INDEX IF NOT EXISTS idx_skill_directory_scan_expanded_path
       ON skill_directory_scan (expanded_path);
+    CREATE TABLE IF NOT EXISTS skill_directory_index (
+      root_path TEXT NOT NULL,
+      skill_name TEXT NOT NULL,
+      skill_path TEXT NOT NULL,
+      description_file TEXT NOT NULL,
+      summary TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (root_path, skill_path)
+    );
+    CREATE INDEX IF NOT EXISTS idx_skill_directory_index_root
+      ON skill_directory_index (root_path, skill_name COLLATE NOCASE);
     CREATE TABLE IF NOT EXISTS app_error_logs (
       id TEXT PRIMARY KEY,
       created_at TEXT NOT NULL,
@@ -770,7 +786,7 @@ function isCopilotSdkAuthError(error) {
   return message.includes("not authenticated") || message.includes("authenticate first") || message.includes("please authenticate") || message.includes("authentication required");
 }
 
-function logServerError(error, { request, status, scope = "server", level = "error", message, details } = {}) {
+function logServerError(error, { request, status, scope = "server", level = "error", message, details, silent = false } = {}) {
   const createdAt = new Date().toISOString();
   const resolvedMessage = message || errorMessage(error);
   const stack = error instanceof Error ? error.stack || "" : "";
@@ -788,12 +804,14 @@ function logServerError(error, { request, status, scope = "server", level = "err
     console.error("[error-log-write-failed]", errorMessage(logError));
   }
 
-  console.error(`[${scope}] ${resolvedMessage}`, {
-    method,
-    route,
-    status,
-    details
-  });
+  if (!silent) {
+    console.error(`[${scope}] ${resolvedMessage}`, {
+      method,
+      route,
+      status,
+      details
+    });
+  }
 }
 
 function errorMessage(error) {
@@ -851,6 +869,44 @@ function seedCurrentDefaultSkillRoot(db) {
 function listScannedSkillRoots() {
   return database
     .prepare(`
+      SELECT
+        roots.id,
+        roots.source_type,
+        roots.agent_slug,
+        roots.label,
+        roots.path,
+        roots.expanded_path,
+        roots.exists_on_disk,
+        roots.removable,
+        roots.updated_at,
+        COUNT(skill_index.skill_path) AS skill_count
+      FROM skill_directory_scan AS roots
+      LEFT JOIN skill_directory_index AS skill_index
+        ON skill_index.root_path = roots.expanded_path
+      WHERE roots.source_type != 'browser'
+      GROUP BY roots.id
+      HAVING skill_count > 0
+      ORDER BY agent_slug = 'current-default' DESC, source_type = 'custom' DESC, label COLLATE NOCASE, expanded_path
+    `)
+    .all()
+    .map((row) => ({
+      id: row.id,
+      type: row.source_type === "browser" ? "browser" : "server",
+      sourceType: row.source_type,
+      agentSlug: row.agent_slug || "",
+      label: row.label,
+      value: row.path,
+      expandedPath: row.expanded_path,
+      existsOnDisk: Boolean(row.exists_on_disk),
+      removable: Boolean(row.removable),
+      skillCount: row.skill_count,
+      updatedAt: row.updated_at
+    }));
+}
+
+function listAllScannedSkillRoots() {
+  return database
+    .prepare(`
       SELECT id, source_type, agent_slug, label, path, expanded_path, exists_on_disk, removable, updated_at
       FROM skill_directory_scan
       WHERE source_type != 'browser'
@@ -903,12 +959,25 @@ function scanDefaultSkillRoots() {
   return { scanned: defaults.length, found, added };
 }
 
-function addCustomSkillRoot({ label, value, type = "server" }) {
+function refreshSkillIndexesForKnownRoots() {
+  const roots = listAllScannedSkillRoots().filter((root) => root.existsOnDisk && root.type === "server");
+  let indexed = 0;
+  for (const root of roots) {
+    indexed += refreshSkillIndex(root.expandedPath);
+  }
+  return { roots: roots.length, indexed };
+}
+
+function addCustomSkillRoot({ label, value, type = "server", language = "en" }) {
   if (!value || typeof value !== "string") {
     throw new Error("A skill directory path is required.");
   }
   const sourceType = type === "browser" ? "browser" : "custom";
   const normalizedValue = sourceType === "browser" ? value : normalizeScanPath(value, sourceType);
+  const scannedSkills = sourceType === "browser" ? [] : scanSkillDirectories(normalizedValue);
+  if (sourceType !== "browser" && scannedSkills.length === 0) {
+    throw new Error(language === "zh" ? "当前目录没有找到 Skill 定义文件（SKILL.md）。" : "No Skill definition file (SKILL.md) was found in the selected directory.");
+  }
   const root = {
     sourceType,
     agentSlug: null,
@@ -917,7 +986,11 @@ function addCustomSkillRoot({ label, value, type = "server" }) {
     removable: true
   };
   upsertScannedSkillRoot(database, root);
-  return listScannedSkillRoots().find((item) => item.expandedPath === normalizeScanPath(normalizedValue, sourceType));
+  const expandedPath = normalizeScanPath(normalizedValue, sourceType);
+  if (sourceType !== "browser") {
+    refreshSkillIndex(expandedPath, scannedSkills);
+  }
+  return listScannedSkillRoots().find((item) => item.expandedPath === expandedPath);
 }
 
 async function pickLocalSkillRoot() {
@@ -934,8 +1007,8 @@ async function pickLocalSkillRoot() {
     }
     return path.resolve(selectedPath);
   } catch (error) {
-    if (error.signal === "SIGTERM" || /User canceled|cancelled|canceled/i.test(error.message)) {
-      throw new Error("Directory selection was cancelled.");
+    if (error.signal === "SIGTERM" || /User canceled|cancelled|canceled|用户已取消|\(-128\)/i.test(error.message)) {
+      throw new Error("用户已取消");
     }
     throw error;
   }
@@ -948,22 +1021,15 @@ async function inspectSkillRoot(root, language = "en") {
     throw new Error("Selected path is not a directory.");
   }
 
-  const entries = await fs.readdir(normalizedRoot, { withFileTypes: true });
-  const directories = entries.filter((entry) => entry.isDirectory() && !entry.name.startsWith("."));
-  let describedSkills = 0;
-  for (const entry of directories) {
-    if (await findDescriptionFile(path.join(normalizedRoot, entry.name))) {
-      describedSkills += 1;
-    }
-  }
+  const skills = scanSkillDirectories(normalizedRoot);
   return {
     path: normalizedRoot,
     suggestedLabel: path.basename(normalizedRoot) || "Custom skills",
-    skillCount: directories.length,
-    describedSkills,
+    skillCount: skills.length,
+    describedSkills: skills.length,
     message: language === "zh"
-      ? `检测到 ${directories.length} 个 Skill 目录，其中 ${describedSkills} 个包含描述文件。`
-      : `${directories.length} Skill directories detected; ${describedSkills} include a description file.`
+      ? `检测到 ${skills.length} 个包含 SKILL.md 的 Skill 目录。`
+      : `${skills.length} Skill directories containing SKILL.md detected.`
   };
 }
 
@@ -971,6 +1037,10 @@ function deleteScannedSkillRoot(id) {
   const row = database.prepare("SELECT removable FROM skill_directory_scan WHERE id = ?").get(id);
   if (!row?.removable) {
     return false;
+  }
+  const root = database.prepare("SELECT expanded_path FROM skill_directory_scan WHERE id = ?").get(id);
+  if (root?.expanded_path) {
+    database.prepare("DELETE FROM skill_directory_index WHERE root_path = ?").run(root.expanded_path);
   }
   database.prepare("DELETE FROM skill_directory_scan WHERE id = ?").run(id);
   return true;
@@ -1019,6 +1089,153 @@ function directoryExists(value) {
   } catch {
     return false;
   }
+}
+
+function fileExists(value) {
+  try {
+    return fsSync.statSync(value).isFile();
+  } catch {
+    return false;
+  }
+}
+
+function scanSkillDirectories(root, current = root, depth = 0) {
+  if (depth > skillIndexMaxDepth) {
+    return [];
+  }
+  let entries = [];
+  try {
+    entries = fsSync.readdirSync(current, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+
+  const visibleDirectories = entries
+    .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
+    .sort((left, right) => left.name.localeCompare(right.name));
+
+  const results = [];
+  for (const entry of visibleDirectories) {
+    const skillPath = path.join(current, entry.name);
+    const manifestPath = path.join(skillPath, skillManifestFileName);
+    if (fileExists(manifestPath)) {
+      results.push({ name: entry.name, path: skillPath, descriptionFile: skillManifestFileName });
+      continue;
+    }
+    results.push(...scanSkillDirectories(root, skillPath, depth + 1));
+  }
+  return results;
+}
+
+function refreshSkillIndex(root, scannedSkills = null) {
+  const rootPath = normalizeScanPath(root, "custom");
+  if (!directoryExists(rootPath)) {
+    database.prepare("DELETE FROM skill_directory_index WHERE root_path = ?").run(rootPath);
+    return 0;
+  }
+
+  const now = new Date().toISOString();
+  const nextSkills = dedupeScannedSkills(scannedSkills || scanSkillDirectories(rootPath));
+  database.exec("BEGIN IMMEDIATE");
+  try {
+    database.prepare("DELETE FROM skill_directory_index WHERE root_path = ?").run(rootPath);
+    const statement = database.prepare(`
+      INSERT INTO skill_directory_index (root_path, skill_name, skill_path, description_file, summary, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+    for (const skill of nextSkills) {
+      const description = readSkillManifestForIndex(skill.path);
+      statement.run(rootPath, skill.name, skill.path, skill.descriptionFile, extractSummary(description), now, now);
+    }
+    database.exec("COMMIT");
+  } catch (error) {
+    database.exec("ROLLBACK");
+    throw error;
+  }
+  return nextSkills.length;
+}
+
+function dedupeScannedSkills(skills) {
+  const selected = new Map();
+  for (const skill of skills) {
+    const key = skill.name.toLowerCase();
+    const current = selected.get(key);
+    if (!current || compareSkillIndexCandidate(skill, current) < 0) {
+      selected.set(key, skill);
+    }
+  }
+  return Array.from(selected.values()).sort((left, right) => left.name.localeCompare(right.name) || left.path.localeCompare(right.path));
+}
+
+function compareSkillIndexCandidate(left, right) {
+  const leftScore = scoreSkillIndexPath(left.path);
+  const rightScore = scoreSkillIndexPath(right.path);
+  return leftScore - rightScore || left.path.length - right.path.length || left.path.localeCompare(right.path);
+}
+
+function scoreSkillIndexPath(skillPath) {
+  let score = 0;
+  if (skillPath.includes(`${path.sep}plugin-install-`)) {
+    score += 100;
+  }
+  if (skillPath.includes(`${path.sep}node_modules${path.sep}`)) {
+    score += 50;
+  }
+  return score;
+}
+
+function readSkillManifestForIndex(skillPath) {
+  const manifestPath = path.join(skillPath, skillManifestFileName);
+  try {
+    const stat = fsSync.statSync(manifestPath);
+    if (stat.size > maxFileBytes) {
+      return `[File omitted: ${skillManifestFileName} is larger than ${maxFileBytes} bytes.]`;
+    }
+    return fsSync.readFileSync(manifestPath, "utf8");
+  } catch {
+    return "";
+  }
+}
+
+function listIndexedSkills(root, language = "en") {
+  const rootPath = normalizeScanPath(root, "custom");
+  return database
+    .prepare(`
+      SELECT skill_name, skill_path, description_file, summary
+      FROM skill_directory_index
+      WHERE root_path = ?
+      ORDER BY skill_name COLLATE NOCASE, skill_path COLLATE NOCASE
+    `)
+    .all(rootPath)
+    .map((row) => ({
+      name: row.skill_name,
+      path: row.skill_path,
+      summary: row.summary || localize("No description file detected.", language),
+      hasDescription: true,
+      descriptionFile: row.description_file
+    }));
+}
+
+function resolveRequestedSkillPath(root, skillName, requestedPath) {
+  const rootPath = normalizeScanPath(root, "custom");
+  if (requestedPath && typeof requestedPath === "string") {
+    const resolvedPath = path.resolve(expandHomePath(requestedPath));
+    const relativePath = path.relative(rootPath, resolvedPath);
+    if (!relativePath.startsWith("..") && !path.isAbsolute(relativePath)) {
+      return resolvedPath;
+    }
+  }
+
+  const row = database
+    .prepare(`
+      SELECT skill_path
+      FROM skill_directory_index
+      WHERE root_path = ? AND skill_name = ?
+      ORDER BY skill_path COLLATE NOCASE
+      LIMIT 1
+    `)
+    .get(rootPath, skillName);
+  return row?.skill_path || path.join(rootPath, skillName);
 }
 
 function normalizeSkillPayload(skill) {
@@ -1175,23 +1392,13 @@ function saveSkillTranslation(skill, model, language, translation) {
 }
 
 async function listSkills(root, language = "en") {
-  const entries = await fs.readdir(root, { withFileTypes: true });
-  const directories = entries.filter((entry) => entry.isDirectory());
-
-  return Promise.all(
-    directories.map(async (entry) => {
-      const skillPath = path.join(root, entry.name);
-      const descriptionFile = await findDescriptionFile(skillPath);
-      const description = descriptionFile ? await readTextFile(descriptionFile) : "";
-      return {
-        name: entry.name,
-        path: skillPath,
-        summary: extractSummary(description) || localize("No description file detected.", language),
-        hasDescription: Boolean(descriptionFile),
-        descriptionFile: descriptionFile ? path.basename(descriptionFile) : null
-      };
-    })
-  );
+  const rootPath = normalizeScanPath(root, "custom");
+  let skills = listIndexedSkills(rootPath, language);
+  if (!skills.length && directoryExists(rootPath)) {
+    refreshSkillIndex(rootPath);
+    skills = listIndexedSkills(rootPath, language);
+  }
+  return skills;
 }
 
 async function readSkill(skillPath, name, language = "en") {
@@ -1215,16 +1422,14 @@ async function readSkill(skillPath, name, language = "en") {
 }
 
 async function findDescriptionFile(skillPath) {
-  for (const candidate of descriptionCandidates) {
-    const candidatePath = path.join(skillPath, candidate);
-    try {
-      const stat = await fs.stat(candidatePath);
-      if (stat.isFile()) {
-        return candidatePath;
-      }
-    } catch {
-      // Candidate does not exist; continue checking conventional names.
+  const candidatePath = path.join(skillPath, skillManifestFileName);
+  try {
+    const stat = await fs.stat(candidatePath);
+    if (stat.isFile()) {
+      return candidatePath;
     }
+  } catch {
+    // Conventional SKILL.md manifest does not exist.
   }
   return null;
 }
@@ -1780,6 +1985,26 @@ async function disconnectCopilotSession(session) {
   await session?.[Symbol.asyncDispose]?.();
 }
 
+async function cleanupCopilotSession(client, session) {
+  const sessionId = session?.sessionId;
+  try {
+    await disconnectCopilotSession(session);
+  } finally {
+    if (sessionId && typeof client?.deleteSession === "function") {
+      try {
+        await client.deleteSession(sessionId);
+      } catch (error) {
+        logServerError(error, {
+          scope: "copilot-sdk-session-cleanup",
+          level: "warn",
+          details: { sessionId },
+          silent: true
+        });
+      }
+    }
+  }
+}
+
 async function stopCopilotClient(client) {
   if (typeof client?.stop === "function") {
     const errors = await client.stop();
@@ -1840,7 +2065,7 @@ async function generateModelLogicMap(skill, model, language = "en", progress = {
       updateProgress(progress.requestId, "merge-analysis", language);
       return normalizeModelLogicMap(mergeModelLogicMapParts(scores, insights, graph), ruleAnalysis, model, language);
     } finally {
-      await disconnectCopilotSession(session);
+      await cleanupCopilotSession(client, session);
     }
   } finally {
     await stopCopilotClient(client);
@@ -1920,7 +2145,7 @@ async function generateSkillMarkdownTranslation(skill, model, language = "en", p
         generatedAt: new Date().toISOString()
       };
     } finally {
-        await disconnectCopilotSession(session);
+      await cleanupCopilotSession(client, session);
     }
   } finally {
       await stopCopilotClient(client);

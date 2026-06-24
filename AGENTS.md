@@ -21,6 +21,7 @@
 - 前端主逻辑集中在 `src/App.tsx`，新增抽象只有在明显降低复杂度或匹配现有模式时才做。
 - UI 改动要考虑中文显示、移动/桌面布局、按钮文字不溢出、Dialog/Select Portal 的交互边界。
 - Radix Select content 是 Portal；当前 Select Root 类型没有 `modal` 属性。Dialog 内嵌 Select 时，用 Dialog `onInteractOutside` guard 处理 Select Portal，避免误关闭。
+- GitHub Copilot SDK 官方说明文档入口：https://github.com/github/copilot-sdk/blob/main/docs/README.md。涉及 Copilot SDK 的客户端创建、认证、模型列表、会话生命周期、持久化、工具权限、AI 评估或翻译调用时，先根据该文档及其链接的专题页核对实现，再进行开发。
 - AI 评估准确性优先：不要为了避免超时压缩/丢弃 Skill 内容；可以拆分模型调用，但每一步应使用完整可用上下文和规则分析。
 - AI 评估当前拆分为评分、洞察/触发 Prompt、图谱三段模型调用，合并成原有 `ModelAnalysis` 结构。
 - 复杂度和 ROI 默认必须是未评估；只有 AI 评估返回模型分数后才展示分数。

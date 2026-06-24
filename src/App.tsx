@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type FocusEvent, type ReactNode } from "react";
 import {
   BrainCircuit,
   ChevronDown,
@@ -26,7 +26,6 @@ import {
   Route,
   ScanSearch,
   Search,
-  Settings,
   Sparkles,
   Sun,
   Target,
@@ -238,12 +237,13 @@ type PendingDirectory = {
   path: string;
   message: string;
   suggestedLabel?: string;
+  skillCount?: number;
 };
 
 const defaultSkillPageSize = 10;
 const minSkillPageSize = 1;
 const maxSkillPageSize = 18;
-const skillRowPitch = 48;
+const skillRowPitch = 37;
 const graphMinZoom = 0.3;
 const graphMinAutoZoom = 0.3;
 const graphMaxZoom = 1.6;
@@ -287,6 +287,10 @@ const copy = {
     translationUnavailable: "No Skill.md content is available.",
     sidebarTitle: "Skill Management",
     sidebarRail: "Skill Management",
+    sidebarModeInspect: "Inspect",
+    sidebarModeMap: "Map",
+    sidebarNewTask: "Rescan roots",
+    sidebarTaskList: "Skill queue",
     skillDirectory: "Skill directory",
     deleteDirectory: "Delete",
     chooseDirectory: "Add directory",
@@ -368,6 +372,7 @@ const copy = {
     directoryConfirmEyebrow: "Local Skill root",
     directoryConfirmTitle: "Add directory",
     directoryNameLabel: "Directory display name",
+    directoryNoSkills: "No Skill definition file (SKILL.md) was found in the selected directory.",
     cancel: "Cancel",
     saveDirectory: "Save directory",
     directorySaved: "Directory saved",
@@ -407,6 +412,10 @@ const copy = {
     translationUnavailable: "没有可展示的 SKILL.md 内容。",
     sidebarTitle: "Skill管理",
     sidebarRail: "Skill管理",
+    sidebarModeInspect: "审查",
+    sidebarModeMap: "图谱",
+    sidebarNewTask: "重扫目录",
+    sidebarTaskList: "Skill 队列",
     skillDirectory: "Skill 目录",
     deleteDirectory: "删除",
     chooseDirectory: "添加目录",
@@ -488,6 +497,7 @@ const copy = {
     directoryConfirmEyebrow: "本地 Skill 根目录",
     directoryConfirmTitle: "添加目录",
     directoryNameLabel: "目录显示名称",
+    directoryNoSkills: "当前目录没有找到 Skill 定义文件（SKILL.md）。",
     cancel: "取消",
     saveDirectory: "保存目录",
     directorySaved: "目录已保存",
@@ -523,7 +533,6 @@ function App() {
   const [logicMapMeta, setLogicMapMeta] = useState("");
   const [evaluationStatus, setEvaluationStatus] = useState("");
   const [githubStatus, setGitHubStatus] = useState<GitHubStatus | null>(null);
-  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [loadingSettingsModels, setLoadingSettingsModels] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem(storageKeys.sidebar) === "1");
@@ -538,7 +547,6 @@ function App() {
   const sidebarScrollRef = useRef<HTMLDivElement | null>(null);
   const skillListRef = useRef<HTMLDivElement | null>(null);
   const skillPaginationRef = useRef<HTMLDivElement | null>(null);
-  const accountMenuRef = useRef<HTMLDivElement | null>(null);
   const settingsModelsRequestRef = useRef(0);
   const settingsModelsLoadedRef = useRef(false);
 
@@ -551,6 +559,7 @@ function App() {
     return query ? skills.filter((skill) => normalizeSearchText(skill.name).includes(query)) : skills;
   }, [skillSearch, skills]);
   const totalPages = Math.max(1, Math.ceil(filteredSkills.length / skillPageSize));
+  const showSkillPagination = totalPages > 1;
   const visibleSkills = filteredSkills.slice((page - 1) * skillPageSize, page * skillPageSize);
 
   useEffect(() => {
@@ -590,14 +599,14 @@ function App() {
       const sidebar = sidebarScrollRef.current;
       const list = skillListRef.current;
       const pagination = skillPaginationRef.current;
-      if (!sidebar || !list || !pagination) return;
+      if (!sidebar || !list) return;
 
       const sidebarRect = sidebar.getBoundingClientRect();
       const listRect = list.getBoundingClientRect();
-      const paginationRect = pagination.getBoundingClientRect();
+      const paginationHeight = showSkillPagination && pagination ? pagination.getBoundingClientRect().height : 0;
       const bottomPadding = window.matchMedia("(min-width: 1024px)").matches ? 20 : 16;
-      const listToPaginationGap = 16;
-      const availableHeight = sidebarRect.bottom - bottomPadding - listRect.top - paginationRect.height - listToPaginationGap;
+      const listToPaginationGap = showSkillPagination ? 16 : 0;
+      const availableHeight = sidebarRect.bottom - bottomPadding - listRect.top - paginationHeight - listToPaginationGap;
       const nextPageSize = Math.min(maxSkillPageSize, Math.max(minSkillPageSize, Math.floor((availableHeight + 8) / skillRowPitch)));
       setSkillPageSize((current) => current === nextPageSize ? current : nextPageSize);
     }
@@ -614,7 +623,7 @@ function App() {
       window.removeEventListener("resize", updateSkillPageSize);
       resizeObserver.disconnect();
     };
-  }, [sidebarCollapsed, language, loadingRoot, roots.length, rootId]);
+  }, [sidebarCollapsed, language, loadingRoot, roots.length, rootId, showSkillPagination]);
 
   useEffect(() => {
     setPathHint(text.defaultPath);
@@ -665,29 +674,6 @@ function App() {
   useEffect(() => {
     setPage((current) => Math.min(current, totalPages));
   }, [totalPages]);
-
-  useEffect(() => {
-    if (!accountMenuOpen) return;
-
-    function closeAccountMenu(event: MouseEvent) {
-      if (!accountMenuRef.current?.contains(event.target as Node)) {
-        setAccountMenuOpen(false);
-      }
-    }
-
-    function closeAccountMenuOnEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setAccountMenuOpen(false);
-      }
-    }
-
-    document.addEventListener("mousedown", closeAccountMenu);
-    document.addEventListener("keydown", closeAccountMenuOnEscape);
-    return () => {
-      document.removeEventListener("mousedown", closeAccountMenu);
-      document.removeEventListener("keydown", closeAccountMenuOnEscape);
-    };
-  }, [accountMenuOpen]);
 
   useEffect(() => {
     if (!settingsOpen) return;
@@ -808,7 +794,6 @@ function App() {
 
   async function signOutGitHub() {
     try {
-      setAccountMenuOpen(false);
       const result = await fetchJson<{ status: GitHubStatus }>("/api/auth/github/logout", { method: "POST" });
       setGitHubStatus(result.status || { authenticated: false });
       toast.success(text.signedOut);
@@ -821,12 +806,13 @@ function App() {
     setLoadingRoot(true);
     setPathHint(text.scanningDirectories);
     try {
-      const result = await fetchJson<{ found: number; roots: SkillRoot[] }>("/api/skill-roots/scan", { method: "POST" });
-      applyRoots(result.roots || []);
+      const currentRootId = rootId;
+      const result = await fetchJson<{ found: number; roots: SkillRoot[]; skillIndex?: { roots: number; indexed: number } }>("/api/skill-roots/scan", { method: "POST" });
+      applyRoots(result.roots || [], currentRootId);
       toast.success(`${text.scanComplete}: ${result.found || 0}`);
-      const firstRoot = result.roots?.[0];
-      if (firstRoot) {
-        await loadSkillsFromServer(firstRoot);
+      const nextRoot = result.roots?.find((root) => root.id === currentRootId) || result.roots?.[0];
+      if (nextRoot) {
+        await loadSkillsFromServer(nextRoot);
       } else {
         setPathHint(text.noScannedDirectories);
       }
@@ -846,6 +832,13 @@ function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ language })
       });
+      if ((result.directory.skillCount || 0) === 0) {
+        toast.error(text.directoryNoSkills);
+        setPendingDirectory(null);
+        setDirectoryName("");
+        setPathHint(selectedRoot ? text.loadedServer : text.defaultPath);
+        return;
+      }
       setPendingDirectory(result.directory);
       setDirectoryName(result.directory.suggestedLabel || "");
     } catch (error) {
@@ -866,7 +859,7 @@ function App() {
       const result = await fetchJson<{ root: SkillRoot; roots: SkillRoot[] }>("/api/skill-roots/custom", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "server", label, value: pendingDirectory.path })
+        body: JSON.stringify({ type: "server", label, value: pendingDirectory.path, language })
       });
       setPendingDirectory(null);
       applyRoots(result.roots || [], result.root?.id || "");
@@ -932,11 +925,11 @@ function App() {
     }
   }
 
-  async function selectSkill(skillName: string) {
+  async function selectSkill(skillName: string, skillPath = "") {
     if (!selectedRoot) {
       return;
     }
-    setSelectedName(skillName);
+    setSelectedName(skillPath || skillName);
     setLoadingSkill(true);
     setSelectedNode(null);
     setSkillDocCollapsed(true);
@@ -945,8 +938,9 @@ function App() {
     setLogicMapMeta(text.rulesAnalysis);
     setEvaluationStatus(text.rulesEvaluationPrompt);
     try {
+      const pathQuery = skillPath ? `&path=${encodeURIComponent(skillPath)}` : "";
       const result = await fetchJson<{ skill: SkillDetail }>(
-        `/api/skills/${encodeURIComponent(skillName)}?root=${encodeURIComponent(selectedRoot.value)}&language=${language}`
+        `/api/skills/${encodeURIComponent(skillName)}?root=${encodeURIComponent(selectedRoot.value)}&language=${language}${pathQuery}`
       );
       setSelectedSkill(result.skill);
       setSelectedNode(result.skill.analysis.graph?.nodes?.[0] || null);
@@ -1203,55 +1197,13 @@ function App() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <header className="sticky top-0 z-[200] border-b bg-card/90 backdrop-blur supports-[backdrop-filter]:bg-card/80">
-        <div className="flex h-[54px] items-center justify-between gap-4 px-4 lg:px-5">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="flex size-[30px] shrink-0 items-center justify-center rounded-lg bg-[image:var(--app-hero)] text-white shadow-[0_0_22px_rgba(0,120,212,0.26),0_0_26px_rgba(192,59,196,0.18)]">
-              <BrainCircuit className="size-4" aria-hidden="true" />
-            </div>
-            <div className="min-w-0">
-              <h1 className="truncate text-base font-semibold tracking-normal lg:text-[17px]">{text.appTitle}</h1>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="icon" className="shadow-sm" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} aria-label={theme === "dark" ? "Light theme" : "Dark theme"}>
-              {theme === "dark" ? <Sun data-icon="inline-start" /> : <Moon data-icon="inline-start" />}
-            </Button>
-            <Button variant="outline" size="icon" className="shadow-sm" onClick={() => setSettingsOpen(true)} aria-label={text.settings}>
-              <Settings data-icon="inline-start" />
-            </Button>
-            <div ref={accountMenuRef} className="relative flex h-9 items-center">
-              <Button
-                variant="outline"
-                size="default"
-                onClick={() => githubStatus?.authenticated ? setAccountMenuOpen((open) => !open) : startGitHubLogin()}
-                className="h-9 min-h-9 gap-2 px-2.5 py-0 shadow-sm sm:px-3"
-                aria-haspopup={githubStatus?.authenticated ? "menu" : undefined}
-                aria-expanded={githubStatus?.authenticated ? accountMenuOpen : undefined}
-              >
-                {githubStatus?.authenticated ? <GitHubIdentity status={githubStatus} /> : <GitBranch data-icon="inline-start" />}
-                <span className={cn("text-[13px] leading-5", githubStatus?.authenticated ? "hidden max-w-36 truncate sm:inline" : "hidden sm:inline")}>{githubStatus?.authenticated ? githubStatus.login || "GitHub" : text.signIn}</span>
-              </Button>
-              {githubStatus?.authenticated && accountMenuOpen ? (
-                <div role="menu" className="absolute right-0 top-[calc(100%+0.5rem)] z-[220] min-w-40 rounded-lg border bg-popover p-1 text-popover-foreground shadow-lg">
-                  <Button type="button" variant="ghost" className="w-full justify-start gap-2 text-destructive hover:text-destructive" onClick={signOutGitHub} role="menuitem">
-                    <LogOut data-icon="inline-start" />
-                    {text.signOut}
-                  </Button>
-                </div>
-              ) : null}
-            </div>
-          </div>
-        </div>
-      </header>
-
       <div
-        className="app-shell grid min-h-[calc(100vh-54px)] min-w-0"
+        className="app-shell grid min-h-screen min-w-0"
         data-sidebar-collapsed={sidebarCollapsed ? "true" : "false"}
         data-skill-doc-collapsed={selectedSkill && skillDocCollapsed ? "true" : "false"}
       >
         <aside className={cn(
-          "sticky top-[54px] h-[calc(100vh-54px)] min-w-0 overflow-hidden border-r bg-[image:var(--app-side)] text-sidebar-foreground",
+          "sticky top-0 h-screen min-w-0 overflow-hidden bg-[image:var(--app-side)] text-sidebar-foreground",
           sidebarCollapsed && "bg-background"
         )}>
           <button
@@ -1268,135 +1220,165 @@ function App() {
             <span className="font-mono text-[9.5px] font-semibold [writing-mode:vertical-rl]">{text.sidebarRail}</span>
           </button>
           <div ref={sidebarScrollRef} className={cn("h-full overflow-y-auto", sidebarCollapsed && "hidden")} data-sidebar-scroll="true">
-            <div className="flex w-full min-w-0 flex-col gap-4 p-4 lg:p-5">
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold tracking-normal">{text.sidebarTitle}</p>
+            <div className="sidebar-console flex h-full w-full min-w-0 flex-col">
+              <div className="sidebar-brand-row">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="sidebar-brand-icon">
+                    <BrainCircuit className="size-4" aria-hidden="true" />
+                  </div>
+                  <h1 className="min-w-0 truncate text-[15px] font-semibold leading-6 tracking-normal text-sidebar-foreground">{text.appTitle}</h1>
                 </div>
                 <Button
-                  variant="outline"
-                  size="icon"
+                  variant="ghost"
+                  size="icon-sm"
                   onClick={() => setSidebarCollapsed(true)}
                   aria-label={text.collapseSidebar}
                   title={text.collapseSidebar}
-                  className="size-8 bg-card/85"
+                  className="sidebar-collapse-button"
                 >
                   <PanelLeftClose data-icon="inline-start" />
                 </Button>
               </div>
-              <Card size="sm" className="min-w-0">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-sm">
-                    <FolderOpen className="size-4" />
-                    {text.skillDirectory}
-                  </CardTitle>
-                  <CardAction>
-                    <Badge variant="secondary">{roots.length}</Badge>
-                  </CardAction>
-                </CardHeader>
-                <CardContent className="flex min-w-0 flex-col gap-3">
-                  <Select value={rootId} onValueChange={handleRootChange} disabled={!roots.length || loadingRoot}>
-                    <SelectTrigger className="w-full min-w-0 [&_[data-slot=select-value]]:truncate">
-                      <SelectValue placeholder={text.skillDirectory} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectGroup>
-                        {roots.map((root) => (
-                          <SelectItem key={root.id} value={root.id}>{root.label}: {root.value}</SelectItem>
-                        ))}
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button variant="outline" onClick={pickLocalDirectory} disabled={loadingRoot} className="min-w-0">
-                      <FolderOpen data-icon="inline-start" />
-                      {text.chooseDirectory}
-                    </Button>
-                    <Button variant="outline" onClick={scanDefaultDirectories} disabled={loadingRoot} className="min-w-0">
-                      <ScanSearch data-icon="inline-start" />
-                      {text.scanDirectories}
-                    </Button>
-                  </div>
-                  <Button variant="destructive" onClick={deleteSelectedRoot} disabled={!selectedRoot?.removable || loadingRoot}>
-                    <Trash2 data-icon="inline-start" />
-                    {text.deleteDirectory}
-                  </Button>
-                </CardContent>
-              </Card>
 
-              <div className="flex min-w-0 items-center justify-between gap-3">
-                <div className="flex items-center gap-2 text-sm font-medium">
-                  <Database className="size-4" />
-                  {text.skills}
+              <div className="sidebar-actions-block">
+                <button type="button" className="sidebar-primary-action" onClick={scanDefaultDirectories} disabled={loadingRoot}>
+                  <span className="sidebar-primary-icon"><ScanSearch className="size-4" aria-hidden="true" /></span>
+                  <span className="min-w-0 flex-1 truncate">{text.sidebarNewTask}</span>
+                  <ChevronRight className="size-3.5" aria-hidden="true" />
+                </button>
+
+                <div className="sidebar-nav-list" aria-label="Skill console navigation">
+                  <div className="sidebar-nav-group">
+                    <button
+                      type="button"
+                      className="sidebar-nav-item is-active"
+                    >
+                      <FolderOpen className="size-4" aria-hidden="true" />
+                      <span className="min-w-0 flex-1 truncate">{text.skillDirectory}</span>
+                      <Badge variant="secondary" className="sidebar-count-badge">{roots.length}</Badge>
+                    </button>
+                    <div className="sidebar-directory-panel">
+                      <Select value={rootId} onValueChange={handleRootChange} disabled={!roots.length || loadingRoot}>
+                        <SelectTrigger className="sidebar-select-trigger w-full min-w-0 [&_[data-slot=select-value]]:truncate">
+                          <SelectValue placeholder={text.skillDirectory} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectGroup>
+                            {roots.map((root) => (
+                              <SelectItem key={root.id} value={root.id}>{root.label}: {root.value}</SelectItem>
+                            ))}
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Button variant="outline" size="sm" onClick={pickLocalDirectory} disabled={loadingRoot} className="min-w-0 bg-card/70">
+                          <FolderOpen data-icon="inline-start" />
+                          {text.chooseDirectory}
+                        </Button>
+                        <Button variant="destructive" size="sm" onClick={deleteSelectedRoot} disabled={!selectedRoot?.removable || loadingRoot} className="min-w-0">
+                          <Trash2 data-icon="inline-start" />
+                          {text.deleteDirectory}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <Badge variant="outline" className="shrink-0">{skills.length}</Badge>
               </div>
 
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
-                <Input value={skillSearch} onChange={(event) => setSkillSearch(event.target.value)} placeholder={text.searchByName} className="pl-8 pr-9" />
-                {skillSearch ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    onClick={() => setSkillSearch("")}
-                    aria-label={text.clearSearch}
-                    title={text.clearSearch}
-                  >
-                    <X data-icon="inline-start" />
-                  </Button>
+              <div className="sidebar-section flex min-h-0 min-w-0 flex-1 flex-col gap-3">
+                <div className="sidebar-section-heading">
+                  <span>{text.sidebarTaskList}</span>
+                  <Badge variant="outline" className="sidebar-count-badge">{filteredSkills.length}</Badge>
+                </div>
+
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+                  <Input value={skillSearch} onChange={(event) => setSkillSearch(event.target.value)} placeholder={text.searchByName} className="sidebar-search-input pl-8 pr-9" />
+                  {skillSearch ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      onClick={() => setSkillSearch("")}
+                      aria-label={text.clearSearch}
+                      title={text.clearSearch}
+                    >
+                      <X data-icon="inline-start" />
+                    </Button>
+                  ) : null}
+                </div>
+
+                <div ref={skillListRef} className="sidebar-skill-list flex min-h-0 flex-col gap-1.5" role="listbox" aria-label="Available skills">
+                  {loadingRoot ? <SkillListSkeleton /> : visibleSkills.length ? visibleSkills.map((skill) => (
+                    <button
+                      key={skill.path || skill.name}
+                      type="button"
+                      role="option"
+                      aria-selected={(skill.path || skill.name) === selectedName}
+                      onClick={() => selectSkill(skill.name, skill.path)}
+                      className={cn("sidebar-skill-row", (skill.path || skill.name) === selectedName && "is-selected")}
+                    >
+                      <span className="sidebar-skill-icon"><BrainCircuit className="size-3.5" aria-hidden="true" /></span>
+                      <span className="min-w-0 flex-1 truncate font-medium">{skill.name}</span>
+                      {skill.hasDescription === false ? <Badge variant="outline" className="sidebar-count-badge">?</Badge> : null}
+                    </button>
+                  )) : (
+                    <div className="sidebar-empty-state">
+                      <MessageSquareText className="size-4" aria-hidden="true" />
+                      <span>{skills.length ? text.noMatchingSkills : text.noSkills}</span>
+                    </div>
+                  )}
+                </div>
+
+                {showSkillPagination ? (
+                  <div ref={skillPaginationRef} className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1} className="bg-card/70">
+                      <ChevronLeft data-icon="inline-start" />
+                      {text.previous}
+                    </Button>
+                    <span className="font-mono text-xs text-muted-foreground">{page}/{totalPages}</span>
+                    <Button variant="outline" size="sm" onClick={() => setPage((current) => Math.min(totalPages, current + 1))} disabled={page >= totalPages} className="bg-card/70">
+                      {text.next}
+                      <ChevronRight data-icon="inline-end" />
+                    </Button>
+                  </div>
                 ) : null}
               </div>
 
-              <div ref={skillListRef} className="flex flex-col gap-2" role="listbox" aria-label="Available skills">
-                {loadingRoot ? <SkillListSkeleton /> : visibleSkills.length ? visibleSkills.map((skill) => (
-                  <button
-                    key={skill.name}
-                    type="button"
-                    role="option"
-                    aria-selected={skill.name === selectedName}
-                    onClick={() => selectSkill(skill.name)}
-                    className={cn(
-                      "flex min-h-10 w-full items-center justify-between gap-3 rounded-lg border bg-card px-3 py-2 text-left text-sm transition-colors hover:bg-accent",
-                      skill.name === selectedName && "border-primary bg-accent"
-                    )}
+              <div className="sidebar-account-bar">
+                <Button variant="outline" size="icon" className="sidebar-account-icon-button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} aria-label={theme === "dark" ? "Light theme" : "Dark theme"}>
+                  {theme === "dark" ? <Sun data-icon="inline-start" /> : <Moon data-icon="inline-start" />}
+                </Button>
+                <div className="relative flex h-9 min-w-0 items-center">
+                  <Button
+                    variant="outline"
+                    size="default"
+                    onClick={() => githubStatus?.authenticated ? setSettingsOpen(true) : startGitHubLogin()}
+                    className="sidebar-account-button"
+                    aria-label={githubStatus?.authenticated ? text.settings : text.signIn}
                   >
-                    <span className="min-w-0 truncate font-medium">{skill.name}</span>
-                    {skill.hasDescription === false ? <Badge variant="outline">?</Badge> : null}
-                  </button>
-                )) : (
-                  <div className="rounded-lg border bg-card p-4 text-sm text-muted-foreground">{skills.length ? text.noMatchingSkills : text.noSkills}</div>
-                )}
-              </div>
-
-              <div ref={skillPaginationRef} className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-                <Button variant="outline" size="sm" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1}>
-                  <ChevronLeft data-icon="inline-start" />
-                  {text.previous}
-                </Button>
-                <span className="font-mono text-xs text-muted-foreground">{page}/{totalPages}</span>
-                <Button variant="outline" size="sm" onClick={() => setPage((current) => Math.min(totalPages, current + 1))} disabled={page >= totalPages}>
-                  {text.next}
-                  <ChevronRight data-icon="inline-end" />
-                </Button>
+                    {githubStatus?.authenticated ? <GitHubIdentity status={githubStatus} /> : <GitBranch data-icon="inline-start" />}
+                    <span className={cn("min-w-0 truncate text-[13px] leading-5", githubStatus?.authenticated ? "max-w-28" : "hidden sm:inline")}>{githubStatus?.authenticated ? githubStatus.login || "GitHub" : text.signIn}</span>
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
         </aside>
 
         <main className="detail-main">
-          {!selectedSkill && !loadingSkill ? (
-            <div className="grid gap-4">
+          <div className="detail-surface">
+            {!selectedSkill && !loadingSkill ? (
+              <div className="grid gap-3">
               <Card className="overflow-hidden border-transparent bg-[image:var(--app-hero)] text-white shadow-[var(--app-shadow)]">
                 <CardHeader className="pb-0">
                   <CardDescription className="font-mono uppercase tracking-normal text-white/80">{text.heroEyebrow}</CardDescription>
-                  <CardTitle className="max-w-3xl text-3xl font-semibold tracking-normal lg:text-[34px]">{text.heroTitle}</CardTitle>
+                  <CardTitle className="max-w-3xl text-2xl font-semibold tracking-normal lg:text-[28px]">{text.heroTitle}</CardTitle>
                 </CardHeader>
-                <CardContent className="grid gap-6 pt-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
-                  <p className="max-w-2xl text-base leading-7 text-white/80">{text.heroBody}</p>
-                  <div className="grid gap-2 rounded-lg border border-white/24 bg-white/14 p-3 text-sm">
+                <CardContent className="grid gap-4 pt-3 lg:grid-cols-[minmax(0,1fr)_16rem]">
+                  <p className="max-w-2xl text-sm leading-6 text-white/80">{text.heroBody}</p>
+                  <div className="grid gap-2 rounded-lg border border-white/24 bg-white/14 p-2.5 text-xs">
                     <LegendDot label="Input" tone="input" />
                     <LegendDot label="Decision" tone="decision" />
                     <LegendDot label="Method" tone="method" />
@@ -1408,29 +1390,29 @@ function App() {
               <Card>
                 <CardHeader>
                   <CardDescription>{text.emptyEyebrow}</CardDescription>
-                  <CardTitle className="text-2xl">{text.emptyTitle}</CardTitle>
+                  <CardTitle className="text-xl">{text.emptyTitle}</CardTitle>
                   <CardDescription>{text.emptyBody}</CardDescription>
                 </CardHeader>
                 <CardContent className="grid gap-3 md:grid-cols-3">
                   {[text.guideDirectory, text.guideSkill, text.guideGraph].map((item, index) => (
-                    <div key={item} className="rounded-lg border bg-muted/30 p-4">
+                    <div key={item} className="rounded-lg border bg-muted/30 p-3">
                       <Badge variant="secondary">{index + 1}</Badge>
-                      <p className="mt-3 text-sm text-muted-foreground">{item}</p>
+                      <p className="mt-2 text-xs leading-5 text-muted-foreground">{item}</p>
                     </div>
                   ))}
                 </CardContent>
               </Card>
-            </div>
-          ) : loadingSkill ? (
-            <DetailSkeleton />
-          ) : selectedSkill ? (
-            <div className="detail-stack">
+              </div>
+            ) : loadingSkill ? (
+              <DetailSkeleton />
+            ) : selectedSkill ? (
+              <div className="detail-stack">
               <div className="detail-overview-grid">
                 <Card>
                   <CardHeader>
                     <CardDescription className="truncate font-mono">{selectedSkill.path}</CardDescription>
-                    <SectionTitle icon={BrainCircuit} tone="input" className="text-3xl tracking-normal">{selectedSkill.name}</SectionTitle>
-                    <CardDescription className="text-sm leading-6">{selectedSkill.modelAnalysis?.summary || selectedSkill.analysis.summary}</CardDescription>
+                    <SectionTitle icon={BrainCircuit} tone="input" className="text-2xl tracking-normal">{selectedSkill.name}</SectionTitle>
+                    <CardDescription className="text-[13px] leading-5">{selectedSkill.modelAnalysis?.summary || selectedSkill.analysis.summary}</CardDescription>
                   </CardHeader>
                   <CardContent className="flex flex-wrap items-center gap-3">
                     <Button onClick={refreshSelectedLogicMap} disabled={generatingMap}>
@@ -1445,13 +1427,13 @@ function App() {
               </div>
 
               <div className="detail-pair-grid">
-                <Card>
+                <Card className="model-insight-card">
                   <CardHeader>
                     <SectionTitle icon={Sparkles} tone="model">{text.modelInsight}</SectionTitle>
                     <CardDescription>{selectedSkill.modelAnalysis ? `${getModelAnalysisMetaLabel(selectedSkill.modelAnalysis, text)} · ${selectedSkill.modelAnalysis.model || model}` : text.rulesAnalysis}</CardDescription>
                   </CardHeader>
-                  <CardContent>
-                    <ScrollArea className="h-36 rounded-lg border bg-muted/20 p-3">
+                  <CardContent className="model-insight-content">
+                    <ScrollArea className="model-insight-scroll rounded-lg border bg-muted/20 p-3">
                       <p className="whitespace-pre-wrap text-sm leading-6">{selectedSkill.modelAnalysis?.insight || text.noCachedModelAnalysis}</p>
                       <ScrollBar />
                     </ScrollArea>
@@ -1543,8 +1525,9 @@ function App() {
 
               </div>
 
-            </div>
-          ) : null}
+              </div>
+            ) : null}
+          </div>
         </main>
 
         {selectedSkill ? (
@@ -1566,7 +1549,6 @@ function App() {
         <DialogContent onInteractOutside={(event) => preventDialogCloseFromSelectPortal(event)}>
           <DialogHeader>
             <DialogTitle>{text.settings}</DialogTitle>
-            <DialogDescription>{text.modelMeta}</DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-2">
@@ -1582,7 +1564,7 @@ function App() {
               </Select>
             </div>
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium">{text.defaultModel}</label>
+              <label className="flex items-center gap-2 text-sm font-medium"><BrainCircuit className="size-4" />{text.defaultModel}</label>
               <Select value={model} onValueChange={setModel} disabled={loadingSettingsModels}>
                 <SelectTrigger className="w-full">
                   {loadingSettingsModels ? <span className="truncate text-muted-foreground">{text.loadingModels}</span> : <SelectValue />}
@@ -1599,10 +1581,14 @@ function App() {
               {githubStatus?.authenticated ? (
                 <>
                   <GitHubIdentity status={githubStatus} />
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <p className="text-xs text-muted-foreground">GitHub</p>
                     <p className="truncate font-medium text-foreground">{githubStatus.login || "GitHub"}</p>
                   </div>
+                  <Button type="button" variant="ghost" className="ml-auto shrink-0 gap-2 text-destructive hover:text-destructive" onClick={signOutGitHub}>
+                    <LogOut data-icon="inline-start" />
+                    {text.signOut}
+                  </Button>
                 </>
               ) : text.notSignedIn}
             </div>
@@ -2354,7 +2340,6 @@ function getGraphNodeIcon(type?: string): LucideIcon {
 function ScoreCard({ label, score, meta, icon: Icon, scale, tooltipAlign = "center" }: { label: string; score: unknown; meta: string; icon: typeof BrainCircuit; scale: "benefit" | "risk"; tooltipAlign?: "center" | "end" }) {
   const value = formatScore(score);
   const tone = getScoreToneClass(score, scale);
-  const tooltipPosition = tooltipAlign === "end" ? "right-0" : "left-1/2 -translate-x-1/2";
   return (
     <Card size="sm" className="relative min-w-0 overflow-visible">
       <CardHeader className="items-center gap-1.5 text-center">
@@ -2362,17 +2347,57 @@ function ScoreCard({ label, score, meta, icon: Icon, scale, tooltipAlign = "cent
           <Icon className="size-[18px]" />
         </div>
         <CardDescription className="text-sm font-medium">{label}</CardDescription>
-        <div data-score-value className={cn("font-mono text-[2.75rem] font-semibold leading-none tracking-normal tabular-nums", tone.text)}>{value}</div>
+        <div data-score-value className={cn("font-mono text-[2.125rem] font-semibold leading-none tracking-normal tabular-nums", tone.text)}>{value}</div>
       </CardHeader>
       <CardContent>
-        <div className="group/score-meta relative flex justify-center">
+        <AdaptiveTooltip content={meta} align={tooltipAlign}>
           <p tabIndex={0} className="line-clamp-2 max-w-full text-center text-xs leading-5 text-muted-foreground outline-none">{meta}</p>
-          <div role="tooltip" className={cn("pointer-events-none absolute bottom-full z-50 mb-2 hidden w-max max-w-[min(18rem,calc(100vw-2rem))] rounded-md border bg-popover px-3 py-2 text-left text-xs leading-5 text-popover-foreground shadow-lg group-hover/score-meta:block group-focus-within/score-meta:block", tooltipPosition)}>
-            {meta}
-          </div>
-        </div>
+        </AdaptiveTooltip>
       </CardContent>
     </Card>
+  );
+}
+
+function AdaptiveTooltip({ children, content, align = "center" }: { children: ReactNode; content: string; align?: "center" | "end" }) {
+  const triggerRef = useRef<HTMLDivElement | null>(null);
+  const [tooltipStyle, setTooltipStyle] = useState<CSSProperties | null>(null);
+
+  function showTooltip() {
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+    const rect = trigger.getBoundingClientRect();
+    const width = Math.min(288, Math.max(192, window.innerWidth - 32));
+    const estimatedHeight = Math.min(220, Math.max(56, Math.ceil(String(content || "").length / 18) * 20 + 24));
+    const gap = 8;
+    const topSpace = rect.top;
+    const showBelow = topSpace < estimatedHeight + gap + 12;
+    const preferredLeft = align === "end" ? rect.right - width : rect.left + rect.width / 2 - width / 2;
+    const left = Math.min(window.innerWidth - width - 16, Math.max(16, preferredLeft));
+    const top = showBelow ? Math.min(window.innerHeight - 16, rect.bottom + gap) : Math.max(16, rect.top - gap);
+    setTooltipStyle({
+      position: "fixed",
+      left,
+      top,
+      width,
+      maxHeight: "min(14rem, calc(100vh - 2rem))",
+      transform: showBelow ? "none" : "translateY(-100%)"
+    });
+  }
+
+  function hideTooltip(event?: FocusEvent<HTMLDivElement>) {
+    if (event?.currentTarget.contains(event.relatedTarget as Node | null)) return;
+    setTooltipStyle(null);
+  }
+
+  return (
+    <div ref={triggerRef} className="relative flex justify-center" onMouseEnter={showTooltip} onMouseLeave={() => hideTooltip()} onFocus={showTooltip} onBlur={hideTooltip}>
+      {children}
+      {tooltipStyle ? (
+        <div role="tooltip" className="pointer-events-none z-[260] overflow-auto rounded-md border bg-popover px-3 py-2 text-left text-xs leading-5 text-popover-foreground shadow-lg" style={tooltipStyle}>
+          {content}
+        </div>
+      ) : null}
+    </div>
   );
 }
 

@@ -1,14 +1,15 @@
 # 核心组件契约
 
-本文定义可复用 Web 控制台的核心组件边界。模板中的 HTML/CSS/JS 是静态示例；在 React、Vue 或其他框架中实现时，应保持这些职责和状态接口，而不是复制 DOM 操作。
+本文定义从 `main` 分支 AI Agent Skills Console 提取出的可复用组件边界。模板中的 HTML/CSS/JS 是静态示例；在 React、Vue 或其他框架中实现时，应保持这些职责和状态接口，而不是复制 DOM 操作。
 
 ## 组件拆分原则
 
-- Shell 只负责布局：Header、LeftMenu、MainContent、RightPanel、DialogLayer。
-- 全局状态集中管理：theme、language、user/account、settings、collapsed panels、privacyMode。
-- 业务状态下沉到业务模块：搜索词、选中项、分页、文档内容、AI 结果不写进 Header 或 Dialog 基础组件。
+- Shell 只负责布局：Header、LeftMenu、MainContent、SkillDocPanel、DialogLayer。
+- 全局状态集中管理：theme、language、account、settings、collapsed panels。
+- 业务状态下沉到业务页面：rootId、skills、search、page、selectedSkill、selectedNode、analysis、translation。
 - 组件通过 props、events 或 store 通信，不直接查询兄弟组件 DOM。
 - 视觉层使用语义 token，不在组件里硬编码主题色。
+- 不在 LeftMenu 放用户身份、下载入口、产品推广或与当前业务无关的导航。
 
 ## AppShell
 
@@ -16,30 +17,32 @@
 
 状态接口：
 - `sidebarCollapsed: boolean`
-- `rightPanelCollapsed: boolean`
-- `rightPanelVisible: boolean`
+- `skillDocCollapsed: boolean`
+- `skillDocVisible: boolean`
 
 DOM/CSS 契约：
 - 根容器使用 `.app-shell`。
-- 折叠状态使用 `data-sidebar-collapsed`、`data-right-panel-collapsed`。
+- 折叠状态使用 `data-sidebar-collapsed`、`data-skill-doc-collapsed`。
 - 主内容列始终为 `minmax(0, 1fr)`。
+- 左右折叠轨宽度统一为 `--rail-width`。
 
 不得承担：业务数据读取、用户认证、模型调用、文件扫描。
 
 ## TopNav
 
-职责：显示产品标识、当前应用标题、全局动作和用户入口。
+职责：显示产品标识、应用标题、全局动作和用户入口。
 
 输入：
 - `title`
 - `theme`
-- `user` 或 `accountStatus`
+- `accountStatus`
 - `onThemeToggle`
 - `onOpenSettings`
 - `onUserMenuToggle`
 
 规则：
-- 只放全局动作；业务动作放 LeftMenu 或 MainContent。
+- 只放全局动作：主题、设置、GitHub 账号。
+- 用户信息只出现在 TopNav，不重复放在 LeftMenu。
 - 图标按钮必须有 `aria-label` 和 `title`。
 - 用户菜单使用 `aria-haspopup="menu"` 和 `aria-expanded`。
 - Header 高度固定为 `--app-header-height`，避免页面跳动。
@@ -48,49 +51,88 @@ DOM/CSS 契约：
 
 ## LeftMenu
 
-职责：承载主导航、输入源选择、搜索、过滤、分页和危险操作。
+职责：承载 Skill 输入源、搜索、分页列表和目录操作。
 
 输入：
 - `collapsed`
-- `items`
-- `selectedItemId`
-- `filters`
+- `roots`
+- `rootId`
+- `skills`
+- `selectedSkillName`
+- `searchValue`
+- `page`
+- `totalPages`
+- `loadingRoot`
 - `onCollapsedChange`
-- `onSelectItem`
-- `onFilterChange`
+- `onRootChange`
+- `onAddDirectory`
+- `onScanDirectories`
+- `onDeleteDirectory`
+- `onSearchChange`
+- `onSelectSkill`
+- `onPageChange`
 
 规则：
 - 折叠后显示窄轨按钮和竖排标签。
 - 内容滚动独立于 MainContent。
-- 操作按卡片分组，危险操作使用 destructive 样式。
+- 操作按卡片分组：目录来源、搜索列表、分页。
+- 危险操作使用 destructive 样式。
 - 列表项和路径必须 `min-width: 0` 并处理溢出。
+- 不展示用户信息，不展示桌面端下载/引导入口，不加入当前业务没有的导航项。
 
-不得承担：右侧文档渲染、设置弹窗、主内容业务计算。
+不得承担：右侧文档渲染、设置弹窗、主内容业务计算、账号菜单。
 
-## RightPanel
+## MainContent
 
-职责：显示当前选中对象的上下文信息，例如文档、文件树、AI 洞察、翻译、活动日志。
+职责：展示当前 Skill 的规则分析、模型分析、逻辑图和执行面。
+
+输入：
+- `selectedSkill`
+- `selectedNode`
+- `graph`
+- `modelAnalysis`
+- `evaluationStatus`
+- `generatingMap`
+- `onGenerateAnalysis`
+- `onSelectNode`
+
+规则：
+- 未选择 Skill 时显示空态引导。
+- 选中 Skill 后显示概览、复杂度、ROI、模型洞察、触发 Prompt、逻辑图、节点详情、工具栈、运行方法。
+- AI 评估按钮只在当前 Skill 概览区出现。
+- 图谱容器可横向滚动，节点文字必须防溢出。
+
+不得承担：根目录选择、设置项保存、文档 panel tab 状态。
+
+## SkillDocPanel
+
+职责：显示当前 Skill 的上下文详情，例如 Skill.md、翻译内容、文件树。
 
 输入：
 - `visible`
 - `collapsed`
-- `activeTab`
-- `contextItem`
-- `tabs`
+- `selectedSkill`
+- `mode`
+- `content`
+- `fileTree`
+- `hasTranslation`
+- `translating`
 - `onCollapsedChange`
+- `onToggleMode`
 - `onTabChange`
 
 规则：
-- 未选中对象时可以不渲染或显示空态。
+- 未选中 Skill 时不渲染。
 - 折叠后保留窄轨按钮，包含图标和竖排标签。
 - tabs 只改变右侧上下文，不改变左侧选中项。
 - 长文档区域使用独立滚动容器。
+- 翻译是上下文动作，不改变原始 Skill 数据。
 
 不得承担：全局设置、认证、左侧筛选、主内容布局计算。
 
 ## Dialog
 
-职责：短流程浮层，例如设置、确认、重命名、认证提示。
+职责：短流程浮层，例如设置、添加目录确认、认证提示。
 
 结构：
 - `DialogHeader`: 标题和说明。
@@ -112,13 +154,11 @@ DOM/CSS 契约：
 - theme
 - defaultModel
 - accountStatus
-- privacyMode
-- cachePreference
 
 规则：
-- 从 TopNav 打开，以 Dialog 或专用设置面板呈现。
+- 从 TopNav 打开，以 Dialog 呈现。
 - 表单字段使用受控状态，保存时统一写入 localStorage 或后端配置。
-- 远端选项列表应有页面会话缓存，避免反复打开设置重复请求。
+- 模型列表应有页面会话缓存，避免反复打开设置重复请求。
 - 账号状态只展示必要信息，不把认证流程塞入基础设置组件。
 
 ## Card / Button / Badge
@@ -138,10 +178,9 @@ DOM/CSS 契约：
 | theme | AppShell / Settings store | localStorage |
 | language | Settings store | localStorage |
 | sidebarCollapsed | AppShell | localStorage |
-| rightPanelCollapsed | AppShell | localStorage |
-| privacyMode | Settings store | localStorage |
-| selectedItem | 业务页面 | URL 或业务 store |
-| activeRightPanelTab | RightPanel | localStorage 或组件状态 |
+| skillDocCollapsed | AppShell | localStorage |
+| selectedSkill | 业务页面 | 组件状态或 URL |
+| skillDocMode | SkillDocPanel | 组件状态 |
 | remote options cache | 数据服务层 | 页面会话内存 |
 
 ## 可访问性清单
@@ -149,6 +188,7 @@ DOM/CSS 契约：
 - 所有图标按钮都有 `aria-label`。
 - 折叠按钮有 `aria-expanded`。
 - 用户菜单有 `role="menu"` 和 `role="menuitem"`。
+- 列表有 `role="listbox"`、`role="option"`、`aria-selected`。
 - Tabs 有 `role="tablist"`、`role="tab"`、`aria-selected`。
 - Dialog 有标题和说明，关闭按钮有屏幕阅读器文本。
 - 颜色状态同时有文本、符号或图标提示。

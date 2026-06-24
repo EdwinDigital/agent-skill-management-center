@@ -1,16 +1,37 @@
 # Web 应用设计标准
 
-本目录沉淀自当前 AI Agent Skills Console 的前端设计语言，用于后续新建本地优先、数据密集、带 AI 辅助能力的开发者控制台。模板资源完全独立，不被当前应用引用；复制到新项目后再按业务场景调整。
+本目录沉淀自 `main` 分支 AI Agent Skills Console 的页面结构和设计语言，用于后续开发本地优先、数据密集、带 AI 辅助能力的控制台类 Web 应用。模板资源完全独立，不被当前应用运行时引用；复制到新项目后再按业务替换内容。
+
+## 适用范围
+
+- 适合：本地开发者工具、Agent/Skill 控制台、文件/目录扫描工具、AI 评估与文档阅读工作台。
+- 不适合：营销 Landing Page、品牌官网、内容站、移动优先社交产品。
+- 当前模板只保留 `main` 分支已有的功能骨架：Header、左侧 Skill 管理、主内容分析区、右侧 Skill 定义面板、设置 Dialog。
+- 不包含当前 `desktop` 分支的实验性桌面侧栏命名或布局，也不包含截图复刻、隐私模式、通用仪表盘指标或额外产品功能。
 
 ## 设计原则
 
-- 控制台优先：首屏直接进入可操作工作台，不做营销式 Landing Page。
-- 本地优先：默认假设数据来自本机目录、文件、缓存或开发环境状态。
-- 中文友好：界面文案默认支持中文，英文作为可选语言；按钮和标签要防止溢出。
-- 高信息密度：列表、图谱、文档阅读、设置和状态反馈要适合扫描、对比和反复使用。
-- AI 辅助但不喧宾夺主：右侧或浮层承载解释、翻译、洞察、日志，不遮挡主工作流。
-- 主题一致：Dark / Light 共用同一套语义变量，不在组件里散落硬编码颜色。
-- 组件解耦：导航、左右菜单、弹窗、用户设置、文档面板都通过状态和属性组合，不互相读写 DOM。
+- 控制台优先：首屏直接进入可操作工作台，不做营销式 Hero 或介绍页。
+- 本地优先：默认数据来自本机目录、文件、缓存或本地服务状态。
+- 中文友好：界面默认可用中文，英文可选；按钮、路径、Skill 名称必须防止溢出。
+- 高信息密度：目录选择、搜索、分页、图谱、文档阅读和设置需要适合长期扫描与反复操作。
+- AI 辅助按需触发：规则分析默认可见，AI 评估、翻译和模型洞察只在用户触发后展示。
+- 主题一致：Light / Dark 共用语义变量，组件里不散落硬编码颜色。
+- 组件边界清晰：Header 只管全局动作，左侧菜单只管输入/选择，主内容展示分析，右侧面板展示上下文。
+
+## 页面骨架
+
+```text
+┌──────────────────────────────────────────────────────────────┐
+│ Header: App mark · title                         theme/user   │
+├────────────────────┬─────────────────────────────┬───────────┤
+│ Left Skill Menu    │ Main Analysis Workspace      │ Right Rail │
+│ - directory root   │ - empty guide / overview     │ Skill.md   │
+│ - scan/add/delete  │ - score cards                │ file tree  │
+│ - search           │ - logic graph                │ translation│
+│ - paged skill list │ - tools/methods/prompts      │            │
+└────────────────────┴─────────────────────────────┴───────────┘
+```
 
 ## 颜色语义
 
@@ -18,7 +39,7 @@
 |---|---|---|---|
 | `--bg` | 页面背景 | `#eef3fa` | `#0e1320` |
 | `--panel` | 卡片/弹窗背景 | `#ffffff` | `#171e2b` |
-| `--panel-strong` | 强调面板/按钮 | `#f7faff` | `#202a3a` |
+| `--panel-strong` | 控件/弱强调背景 | `#f7faff` | `#202a3a` |
 | `--line` | 边框/分割线 | `#e3eaf5` | `#28313f` |
 | `--text` | 主文字 | `#172033` | `#eef2f8` |
 | `--muted` | 次级文字 | `#667085` | `#9aa6b6` |
@@ -28,116 +49,110 @@
 | `--danger` | 删除/错误 | `#ff174f` | `#ff174f` |
 | `--success` | 成功/可用 | `#16a34a` | `#00ffd5` |
 
-颜色必须走语义变量：业务状态使用 `--success` / `--danger`，主操作使用 `--accent`，文档阅读使用 `--document`，模型洞察或逻辑图使用 `--analysis`。
+颜色必须走语义变量：主操作使用 `--accent`，文档阅读使用 `--document`，模型洞察或逻辑图使用 `--analysis`，删除或错误使用 `--danger`。
 
 ## 布局规范
 
-### 应用骨架
+### Header
 
-- 顶部固定 Header：高度 `54px`，包含应用标识、标题、主题切换、用户/账户入口、设置入口。
-- 左侧主菜单：默认宽度 `clamp(16rem, 44vw, 21.25rem)`，折叠宽度 `2.5rem`。
-- 右侧上下文菜单：默认浮层宽度 `min(42rem, calc(100vw - 2rem))`，折叠宽度 `2.5rem`。
-- 主内容区：`minmax(0, 1fr)`，所有网格子项必须设置 `min-width: 0`，防止文档、路径和长名称撑破布局。
-- 弹窗层级高于 Header 和侧栏，Header `z-index` 约 `200`，Dialog Overlay `210`，Dialog Content `220`。
+- 高度固定为 `54px`。
+- 左侧：30px 应用标识 + 单行标题。
+- 右侧：主题切换、设置、账户入口。
+- Header 只放全局动作；扫描、选择目录、AI 评估等业务动作不放 Header。
 
-### 栅格
+### 左侧 Skill 管理
 
-- 总览区：`detail-stack` 纵向组织，卡片之间默认 `1rem` 间距。
-- 双栏区：`repeat(auto-fit, minmax(min(21rem, 100%), 1fr))`，适合状态卡和说明卡。
-- 三栏区：`repeat(auto-fit, minmax(min(16rem, 100%), 1fr))`，适合触发词、工具、方法等列表。
-- 文档/表格：容器横向滚动或自动换行，不通过缩小字体牺牲可读性。
+- 默认宽度 `clamp(16rem, 44vw, 21.25rem)`，折叠宽度 `2.5rem`。
+- 固定在 Header 下方，高度 `calc(100vh - 54px)`，自身滚动。
+- 内容采用 main 分支卡片式组织：标题行、目录来源卡片、Skill 列表区、分页。
+- 目录来源卡片包含：根目录 Select、添加目录、全局扫描、删除目录。
+- Skill 列表区包含：列表标题、搜索输入、分页列表、上一页/下一页。
+- 折叠后保留窄轨按钮和竖排标签，不重置已加载数据。
 
-### 折叠菜单
+### 主内容区
 
-- 左右折叠菜单都保留窄轨按钮，不让用户迷失上下文。
-- 窄轨使用图标 + 竖排文字，例如“Skill管理”“Skill定义详情”。
-- 折叠状态只改变容器宽度和内容显示，不能卸载业务数据或重置滚动位置，除非业务明确要求。
+- 主列使用 `minmax(0, 1fr)`，所有网格子项设置 `min-width: 0`。
+- 未选中 Skill 时展示空态引导：选择目录、选择 Skill、查看图谱。
+- 选中 Skill 后展示：概览卡、复杂度/ROI、模型洞察、触发 Prompt、逻辑图、节点详情、工具栈、运行方法。
+- AI 评估按钮放在当前 Skill 概览卡里，状态文案跟随按钮旁边展示。
+
+### 右侧 Skill 定义面板
+
+- 仅在选中 Skill 后显示。
+- 默认可折叠为 `2.5rem` 窄轨。
+- 展开宽度为 `min(42rem, calc(100vw - 2rem))`。
+- 面板 tabs 只用于 `SKILL.md` 与文件目录，不改变左侧选中项。
+- 长文档使用独立滚动区域；Markdown 标题、代码块、表格都必须防溢出。
+
+### Dialog
+
+- 用于设置、目录确认、认证提示等短流程。
+- 固定结构：Header / Body / Footer。
+- Dialog 内 Select 使用 Portal 时，需要外部点击保护，避免误关闭。
+- Footer 主按钮必须描述动作，例如“保存”“保存目录”，不要使用模糊的“提交”。
 
 ## 字体与文字
 
 - 字体族：`Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif`。
 - 不使用负 letter-spacing；默认 `letter-spacing: 0`。
-- 卡片内标题不使用 Hero 级字号，避免信息密集界面显得笨重。
-- 长路径、文件名、Markdown、图谱节点文字必须处理溢出：单行用渐变遮罩，多行用 `overflow-wrap: anywhere` 或 line clamp。
+- 卡片标题不使用 Hero 级字号。
+- 路径、文件名、Skill 名称、Markdown 和图谱节点必须处理溢出。
+- 中文按钮优先短动词：添加目录、全局扫描、AI 评估、翻译、保存。
 
 ## 组件规范
 
-### 顶部导航栏
+### Card
 
-- App 标识为 30px 方形图标，8px 圆角，背景使用 `--hero` 渐变。
-- 主标题 16-17px，单行截断；不要在 Header 放大段副标题。
-- 右侧只放全局动作：主题、设置、用户/账户菜单。业务动作放左侧菜单或主内容区。
-- 图标按钮统一使用 `.icon-button`，必须带 `aria-label` 和 `title`。
+- Card 分为 Header / Title / Description / Action / Content / Footer。
+- 概览卡可使用渐变强调，普通信息卡保持白底或语义背景。
+- 不要把页面 section 包成多层卡片；卡片只承载明确的信息单元。
 
-### 左侧菜单
+### Button
 
-- 左侧菜单是主导航和输入面板，承载目录选择、搜索、过滤、分页和危险操作。
-- 宽屏下固定在 Header 下方，滚动容器独立，主内容滚动不影响左侧。
-- 折叠状态通过 `data-sidebar-collapsed` 或等价状态驱动，窄轨按钮负责展开。
-- 菜单内容拆成小卡片：来源选择、搜索筛选、列表/导航、批量动作。
+- 支持 default、outline、ghost、destructive。
+- 图标按钮必须有 `aria-label` 和 `title`。
+- 图标在文字按钮中使用 inline-start / inline-end 的等价语义。
+- 控件高度保持 24/28/32/36px 阶梯，避免营销式大按钮。
 
-### 右侧菜单 / 上下文面板
+### Select/Input
 
-- 右侧菜单用于上下文详情、文档阅读、AI 解释、翻译、文件树和活动日志。
-- 默认可覆盖在主内容右侧，折叠后保留 2.5rem 窄轨。
-- 面板内部可有 tabs，但 tabs 只切换右侧上下文，不改变左侧选择。
-- 长文档阅读必须使用独立 ScrollArea，工具栏固定在内容上方。
+- Select 只用于有限选项，例如根目录、语言、模型。
+- Input 用于搜索或命名，必须支持长文本和清空动作。
+- Dialog 中 Select 的弹层需要考虑 Portal 行为。
 
-### 弹窗 Dialog
+### Tabs
 
-- Dialog 只承载短流程：设置、确认、命名、认证提示、危险操作确认。
-- 结构固定为 Header / Body / Footer，底部按钮右对齐，移动端可纵向堆叠。
-- Dialog 内嵌 Select 时必须处理 Portal 外部点击，避免选择下拉框打开时误关闭弹窗。
-- Footer 中主按钮文案必须描述动作，例如“保存设置”“添加目录”，不要用“提交”。
+- 只用于右侧上下文面板的局部切换。
+- 使用 `role="tablist"`、`role="tab"`、`aria-selected`。
+- 激活态使用底部 2px 色条，不使用大面积背景。
 
-### 用户设置
+### Markdown / File Tree
 
-- 用户设置属于全局状态，只从顶部导航进入。
-- 常见设置包括语言、主题、默认模型、账号状态、缓存偏好。
-- 设置数据应通过受控状态保存到 localStorage 或后端配置，不由组件直接查询 DOM。
-- 模型列表这类远端数据应按页面会话缓存，避免每次打开设置重复请求。
-
-### 基础卡片与按钮
-
-- Card 使用 `data-slot` 标记 header/title/description/action/content/footer，便于局部样式覆盖。
-- Button 支持 `default`、`outline`、`secondary`、`ghost`、`destructive`、`link`，图标通过 `data-icon` 标记位置。
-- 图标优先使用 lucide 或等价图标库，不手写临时 SVG。
-- 控件高度保持 24/28/32/36px 阶梯，避免密集控制台里出现大号营销按钮。
-
-### 文档、图谱和列表
-
-- Markdown 标题用左侧 3px 色条和轻背景表达层级，不使用大面积装饰。
+- Markdown 标题使用 3px 左边色条。
+- 代码块允许换行并保持 monospace。
 - 文件树每行三列：展开占位、图标、名称；名称必须 `min-width: 0`。
-- 图谱节点文本最多两行，节点类型一行，详情可渐隐，不允许挤压布局。
-- 列表分页高度可根据容器计算，但分页控件不能被列表内容挤出视口。
-
-### 隐私模式
-
-- 隐私模式只影响显示层，不能改变底层数据、排序、聚合、图表几何和判断逻辑。
-- 本地路径、账号名、目录名、模型名、缓存数量、行数、序号、日期数字等可显示为 `***`。
-- 按钮使用眼睛/隐藏眼睛图标，并通过 `aria-pressed` 暴露状态。
 
 ## 可访问性
 
 - 图标按钮必须有 `aria-label` 和 `title`。
 - 折叠按钮维护 `aria-expanded`。
-- 隐私按钮维护 `aria-pressed`。
-- Tabs 使用 `role="tablist"`、`role="tab"`、`aria-selected`。
-- 颜色表达状态时，也要保留符号或文本信息，例如 `+/-`、成功/失败文案或图标。
+- 用户菜单使用 `aria-haspopup="menu"` 和 `aria-expanded`。
+- 列表使用 `role="listbox"` / `role="option"`，选中项使用 `aria-selected`。
+- Dialog 有标题和说明。
+- 状态不能只靠颜色表达，必须有文字、符号或图标辅助。
 
 ## 文件说明
 
-- `CORE_COMPONENTS.md`：顶部导航、Dialog、左侧菜单、右侧菜单、用户设置等组件契约。
-- `templates/app-shell.html`：完整页面骨架模板。
-- `assets/design-tokens.css`：主题变量、基础 reset、应用骨架布局。
-- `assets/components.css`：Header、菜单、Dialog、设置、卡片、文档、列表等组件样式。
-- `assets/template.js`：主题切换、菜单折叠、Dialog、用户设置和隐私模式示例。
+- `CORE_COMPONENTS.md`：核心组件职责和状态接口。
+- `templates/app-shell.html`：main 分支功能骨架的静态 HTML 示例。
+- `assets/design-tokens.css`：主题变量、reset、应用骨架布局。
+- `assets/components.css`：Header、左侧菜单、右侧面板、Dialog、卡片、文档和列表样式。
+- `assets/template.js`：主题切换、左右面板折叠、设置 Dialog 示例。
 
 ## 使用方式
 
 1. 复制 `templates/app-shell.html` 到新项目入口。
 2. 引入 `assets/design-tokens.css` 和 `assets/components.css`。
-3. 按业务替换左侧菜单、主内容、右侧上下文面板。
-4. 保留 CSS 变量命名、组件 class 和 `data-*` 状态属性，新增业务组件时优先复用 token。
-5. 若使用 React + shadcn/Radix，可把本模板视为组件契约，再用项目内组件实现视觉层。
-6. 如果项目包含敏感本地路径、账号或客户数据，启用 `template.js` 中的隐私模式格式化函数。
+3. 按业务替换左侧目录来源、列表项和主内容卡片。
+4. 保留 CSS 变量命名、组件 class 和 `data-*` 状态属性。
+5. 如果使用 React + shadcn/Radix，把本模板视为组件契约，再用项目内组件实现视觉层。
