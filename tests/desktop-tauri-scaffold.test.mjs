@@ -9,8 +9,8 @@ const tauriLib = fs.readFileSync(new URL("../src-tauri/src/lib.rs", import.meta.
 
 test("package scripts expose Tauri desktop workflows", () => {
   assert.equal(packageJson.scripts["desktop:dev"], "npx @tauri-apps/cli@latest dev");
-  assert.equal(packageJson.scripts["desktop:build:mac"], "npx @tauri-apps/cli@latest build --bundles dmg && node scripts/apply-dmg-icon.js");
-  assert.equal(fs.existsSync(new URL("../scripts/apply-dmg-icon.js", import.meta.url)), true);
+  assert.equal(packageJson.scripts["desktop:build:mac"], "npx @tauri-apps/cli@latest build --bundles dmg && node scripts/build-dmg-app.js");
+  assert.equal(fs.existsSync(new URL("../scripts/build-dmg-app.js", import.meta.url)), true);
 });
 
 test("Tauri desktop scaffold is present", () => {

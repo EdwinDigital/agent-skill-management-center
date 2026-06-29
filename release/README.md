@@ -22,4 +22,5 @@ Current desktop scope:
 - The first scaffold keeps the existing web build path: `public/dist`.
 - The Node/Express API sidecar is bundled as a Tauri resource under `sidecar-node` and started by the desktop shell on a random local port.
 - Generated DMG artifacts are copied here for manual distribution; `release/*.dmg` remains ignored by Git.
+- Each macOS desktop build prunes this folder to keep only the latest two DMG versions.
 - macOS signing, notarization, stapling, and updater signing remain release pipeline tasks.

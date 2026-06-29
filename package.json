@@ -11,7 +11,7 @@
     "stop": "node scripts/stop.js",
     "check": "node --check server.js && tsc --noEmit",
     "desktop:dev": "npx @tauri-apps/cli@latest dev",
-    "desktop:build:mac": "npx @tauri-apps/cli@latest build --bundles dmg && node scripts/apply-dmg-icon.js"
+    "desktop:build:mac": "npx @tauri-apps/cli@latest build --bundles dmg && node scripts/build-dmg-app.js"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.2.9",

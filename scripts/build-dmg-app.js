@@ -15,8 +15,12 @@ fs.mkdirSync(releaseDirectory, { recursive: true });
 applyCustomFinderIcon(dmgPath, sourceIconPath);
 fs.copyFileSync(dmgPath, releaseDmgPath);
 applyCustomFinderIcon(releaseDmgPath, sourceIconPath);
+const removedDmgs = pruneReleaseDmgs(releaseDirectory, 2);
 
 console.log(`Prepared DMG with Finder icon: ${path.relative(projectRoot, releaseDmgPath)}`);
+if (removedDmgs.length) {
+  console.log(`Cleaned old release DMGs: ${removedDmgs.map((fileName) => path.join("release", fileName)).join(", ")}`);
+}
 
 function findLatestDmg(directory) {
   const candidates = fs
@@ -49,4 +53,49 @@ function applyCustomFinderIcon(targetPath, iconPath) {
   } finally {
     fs.rmSync(temporaryDirectory, { recursive: true, force: true });
   }
+}
+
+function pruneReleaseDmgs(directory, keepCount) {
+  const dmgFiles = fs
+    .readdirSync(directory)
+    .filter((fileName) => fileName.endsWith(".dmg"))
+    .map((fileName) => {
+      const filePath = path.join(directory, fileName);
+      return {
+        fileName,
+        filePath,
+        modifiedAt: fs.statSync(filePath).mtimeMs,
+        version: parseDmgVersion(fileName)
+      };
+    })
+    .sort(compareReleaseDmgFiles);
+
+  const removed = [];
+  for (const candidate of dmgFiles.slice(keepCount)) {
+    fs.rmSync(candidate.filePath, { force: true });
+    removed.push(candidate.fileName);
+  }
+  return removed;
+}
+
+function compareReleaseDmgFiles(left, right) {
+  const versionComparison = compareVersions(right.version, left.version);
+  if (versionComparison !== 0) {
+    return versionComparison;
+  }
+  return right.modifiedAt - left.modifiedAt;
+}
+
+function parseDmgVersion(fileName) {
+  return fileName.match(/_(\d+)\.(\d+)\.(\d+)(?:[_-]|\.dmg$)/)?.slice(1, 4).map(Number) || [0, 0, 0];
+}
+
+function compareVersions(left, right) {
+  for (let index = 0; index < Math.max(left.length, right.length); index += 1) {
+    const difference = (left[index] || 0) - (right[index] || 0);
+    if (difference !== 0) {
+      return difference;
+    }
+  }
+  return 0;
 }
