@@ -121,9 +121,12 @@ Node/Express 服务端 (server.js)
 │  ├─ favicon.svg
 │  └─ dist/                   # Vite 生产输出，Git 忽略
 ├─ data/                      # 本地 SQLite 运行数据，Git 忽略
+├─ VERSION.md                 # Version 1.0 定义和版本策略
 ├─ README.md
 └─ README-CN.md
 ```
+
+当前发布定义：**Agent Skill Management Center Version 1.0**。Version 1.0 范围、稳定性规则和发布验证要求见 `VERSION.md`。
 
 ## 数据和缓存模型
 
