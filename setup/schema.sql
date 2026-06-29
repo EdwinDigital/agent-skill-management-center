@@ -81,3 +81,14 @@ CREATE INDEX IF NOT EXISTS idx_app_error_logs_created_at
   ON app_error_logs (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_app_error_logs_scope
   ON app_error_logs (scope, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS github_oauth_tokens (
+  id TEXT PRIMARY KEY,
+  access_token TEXT NOT NULL,
+  token_type TEXT,
+  scope TEXT,
+  login TEXT,
+  avatar_url TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);

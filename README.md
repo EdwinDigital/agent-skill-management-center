@@ -121,12 +121,12 @@ Local runtime data
 │  ├─ favicon.svg
 │  └─ dist/                   # Vite production output, ignored by Git
 ├─ data/                      # Local SQLite runtime data, ignored by Git
-├─ VERSION.md                 # Version 1.0 definition and versioning policy
+├─ VERSION.md                 # Version definition and versioning policy
 ├─ README.md
 └─ README-CN.md
 ```
 
-Current release definition: **Agent Skill Management Center Version 1.0**. See `VERSION.md` for the Version 1.0 scope, stability rules, and release validation expectations.
+Current release definition: **Agent Skill Management Center Version 1.1**. See `VERSION.md` for the release scope, stability rules, and release validation expectations.
 
 ## Data and Cache Model
 

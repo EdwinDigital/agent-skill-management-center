@@ -2,9 +2,9 @@
 
 ## Current Version
 
-**Agent Skill Management Center Version 1.0**
+**Agent Skill Management Center Version 1.1.1**
 
-Package version: `1.0.0`
+Package version: `1.1.1`
 
 ## Version 1.0 Scope
 

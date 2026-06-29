@@ -241,6 +241,21 @@ type GitHubAuthGuide = {
   authCommand?: string;
 };
 
+type GitHubDeviceAuth = {
+  requestId: string;
+  user_code: string;
+  verification_uri: string;
+  expires_in: number;
+  interval: number;
+};
+
+type GitHubDevicePollResponse = {
+  status: "pending" | "authorized" | "expired" | "denied";
+  interval?: number;
+  message?: string;
+  authStatus?: GitHubStatus;
+};
+
 type PendingDirectory = {
   path: string;
   message: string;
@@ -403,7 +418,16 @@ const copy = {
     commandCopied: "Command copied",
     githubAuthReady: "GitHub Copilot SDK authorization is ready.",
     githubAuthNeeded: "GitHub Copilot SDK needs authorization.",
-    githubAuthAfterCommand: "After the command finishes, press Check status."
+    githubAuthAfterCommand: "After the command finishes, press Check status.",
+    githubLoginTitle: "Login with GitHub",
+    githubLoginBody: "Authorize Agent SMC with GitHub OAuth so Copilot SDK features can use your account.",
+    githubLoginButton: "Login with GitHub",
+    githubDeviceCodeInstruction: "Enter this code in the browser window:",
+    githubDeviceCodeCopied: "Verification code copied.",
+    githubOpenDevicePage: "Open GitHub device page",
+    githubWaitingAuth: "Waiting for GitHub authorization...",
+    githubAuthExpired: "GitHub authorization expired. Start login again.",
+    githubAuthDenied: "GitHub authorization was denied."
   },
   zh: {
     appEyebrow: "Skill OS",
@@ -537,12 +561,21 @@ const copy = {
     commandCopied: "命令已复制",
     githubAuthReady: "GitHub Copilot SDK 授权已就绪。",
     githubAuthNeeded: "GitHub Copilot SDK 需要授权。",
-    githubAuthAfterCommand: "命令执行完成后，点击检查状态。"
+    githubAuthAfterCommand: "命令执行完成后，点击检查状态。",
+    githubLoginTitle: "登录 GitHub",
+    githubLoginBody: "通过 GitHub OAuth 授权 Agent SMC，让 Copilot SDK 功能可以使用你的账号。",
+    githubLoginButton: "登录 GitHub",
+    githubDeviceCodeInstruction: "在浏览器窗口中输入这个验证码：",
+    githubDeviceCodeCopied: "验证码已复制。",
+    githubOpenDevicePage: "打开 GitHub 设备授权页面",
+    githubWaitingAuth: "正在等待 GitHub 授权...",
+    githubAuthExpired: "GitHub 授权已过期，请重新登录。",
+    githubAuthDenied: "GitHub 授权已被拒绝。"
   }
 } satisfies Record<Language, Record<string, string>>;
 
 function App() {
-  const [language, setLanguage] = useState<Language>(() => (localStorage.getItem(storageKeys.language) as Language) || "en");
+  const [language, setLanguage] = useState<Language>(getInitialLanguage);
   const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem(storageKeys.theme) as Theme) || "light");
   const [appZoomPercent, setAppZoomPercent] = useState(() => normalizeAppZoom(localStorage.getItem(storageKeys.appZoom)));
   const [models, setModels] = useState<ModelInfo[]>([]);
@@ -565,6 +598,10 @@ function App() {
   const [logicMapMeta, setLogicMapMeta] = useState("");
   const [evaluationStatus, setEvaluationStatus] = useState("");
   const [githubStatus, setGitHubStatus] = useState<GitHubStatus | null>(null);
+  const [githubOAuthOpen, setGitHubOAuthOpen] = useState(false);
+  const [githubDeviceAuth, setGitHubDeviceAuth] = useState<GitHubDeviceAuth | null>(null);
+  const [githubOAuthLoading, setGitHubOAuthLoading] = useState(false);
+  const [githubOAuthMessage, setGitHubOAuthMessage] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [loadingSettingsModels, setLoadingSettingsModels] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem(storageKeys.sidebar) === "1");
@@ -581,6 +618,7 @@ function App() {
   const skillPaginationRef = useRef<HTMLDivElement | null>(null);
   const settingsModelsRequestRef = useRef(0);
   const settingsModelsLoadedRef = useRef(false);
+  const githubOAuthTimerRef = useRef<number | null>(null);
 
   const text = copy[language];
   const evaluationProgressText = evaluationStatus;
@@ -617,8 +655,11 @@ function App() {
 
   useEffect(() => {
     document.documentElement.style.setProperty("--app-zoom", `${appZoomPercent}%`);
+    document.documentElement.style.setProperty("--app-zoom-scale", String(appZoomPercent / 100));
     localStorage.setItem(storageKeys.appZoom, String(appZoomPercent));
   }, [appZoomPercent]);
+
+  useEffect(() => () => clearGitHubOAuthTimer(), []);
 
   useEffect(() => {
     function handleAppZoomShortcut(event: KeyboardEvent) {
@@ -811,6 +852,8 @@ function App() {
       setGitHubStatus(status);
       if (status.ready) {
         toast.dismiss(githubAuthToastId);
+      } else {
+        setGitHubOAuthOpen(true);
       }
     } catch (error) {
       console.warn("Unable to sync GitHub status on startup", error);
@@ -848,17 +891,99 @@ function App() {
   }
 
   async function startGitHubLogin() {
+    await startGitHubOAuthLogin();
+  }
+
+  async function startGitHubOAuthLogin() {
     try {
-      const status = await fetchJson<GitHubStatus>("/api/auth/github/status?check=1");
-      setGitHubStatus(status);
-      if (status.ready) {
-        toast.dismiss(githubAuthToastId);
-        toast.success(`${text.signedIn}: ${status.login || "GitHub"}`);
-        return;
-      }
-      showGitHubAuthGuide(status, text, refreshGitHubStatus);
+      clearGitHubOAuthTimer();
+      setGitHubOAuthLoading(true);
+      setGitHubOAuthMessage("");
+      setGitHubDeviceAuth(null);
+      setGitHubOAuthOpen(true);
+      const auth = await fetchJson<GitHubDeviceAuth>("/api/auth/github/device/start", { method: "POST" });
+      setGitHubDeviceAuth(auth);
+      pollGitHubOAuthDeviceFlow(auth, auth.interval);
     } catch (error) {
       notifyError(error);
+      setGitHubOAuthLoading(false);
+    }
+  }
+
+  async function openGitHubDevicePage(auth: GitHubDeviceAuth | null = githubDeviceAuth) {
+    if (!auth) {
+      return;
+    }
+    const authWindow = window.open("about:blank", "_blank");
+    try {
+      await copyTextToClipboard(auth.user_code);
+      toast.success(text.githubDeviceCodeCopied);
+      if (authWindow) {
+        authWindow.opener = null;
+        authWindow.location.href = auth.verification_uri;
+      } else {
+        window.open(auth.verification_uri, "_blank", "noopener,noreferrer");
+      }
+    } catch (error) {
+      authWindow?.close();
+      notifyError(error);
+    }
+  }
+
+  function cancelGitHubOAuth() {
+    clearGitHubOAuthTimer();
+    setGitHubOAuthLoading(false);
+    setGitHubDeviceAuth(null);
+    setGitHubOAuthMessage("");
+    setGitHubOAuthOpen(false);
+  }
+
+  function handleGitHubOAuthOpenChange(open: boolean) {
+    if (open) {
+      setGitHubOAuthOpen(true);
+      return;
+    }
+    cancelGitHubOAuth();
+  }
+
+  function pollGitHubOAuthDeviceFlow(auth: GitHubDeviceAuth, intervalSeconds: number) {
+    clearGitHubOAuthTimer();
+    githubOAuthTimerRef.current = window.setTimeout(async () => {
+      try {
+        const result = await fetchJson<GitHubDevicePollResponse>("/api/auth/github/device/poll", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ requestId: auth.requestId })
+        });
+        if (result.status === "authorized") {
+          const nextStatus = result.authStatus || await refreshGitHubStatus(false);
+          setGitHubStatus(nextStatus);
+          setGitHubOAuthLoading(false);
+          setGitHubDeviceAuth(null);
+          setGitHubOAuthOpen(false);
+          settingsModelsLoadedRef.current = false;
+          toast.dismiss(githubAuthToastId);
+          toast.success(`${text.signedIn}: ${nextStatus.login || "GitHub"}`);
+          return;
+        }
+        if (result.status === "pending") {
+          setGitHubOAuthMessage(text.githubWaitingAuth);
+          pollGitHubOAuthDeviceFlow(auth, result.interval || intervalSeconds);
+          return;
+        }
+        setGitHubOAuthLoading(false);
+        setGitHubOAuthMessage(result.message || (result.status === "denied" ? text.githubAuthDenied : text.githubAuthExpired));
+      } catch (error) {
+        setGitHubOAuthLoading(false);
+        notifyError(error);
+      }
+    }, Math.max(5, intervalSeconds) * 1000);
+  }
+
+  function clearGitHubOAuthTimer() {
+    if (githubOAuthTimerRef.current !== null) {
+      window.clearTimeout(githubOAuthTimerRef.current);
+      githubOAuthTimerRef.current = null;
     }
   }
 
@@ -1288,14 +1413,14 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="app-root bg-background text-foreground">
       <div
         className="app-shell grid min-h-screen min-w-0"
         data-sidebar-collapsed={sidebarCollapsed ? "true" : "false"}
         data-skill-doc-collapsed={selectedSkill && skillDocCollapsed ? "true" : "false"}
       >
         <aside className={cn(
-          "sticky top-0 h-screen min-w-0 overflow-hidden bg-[image:var(--app-side)] text-sidebar-foreground",
+          "app-sidebar min-w-0 overflow-hidden bg-[image:var(--app-side)] text-sidebar-foreground",
           sidebarCollapsed && "bg-background"
         )}>
           <button
@@ -1311,7 +1436,7 @@ function App() {
             <PanelLeftOpen className="size-3.5" />
             <span className="font-mono text-[9.5px] font-semibold [writing-mode:vertical-rl]">{text.sidebarRail}</span>
           </button>
-          <div ref={sidebarScrollRef} className={cn("h-full overflow-y-auto", sidebarCollapsed && "hidden")} data-sidebar-scroll="true">
+          <div ref={sidebarScrollRef} className={cn("sidebar-scroll", sidebarCollapsed && "hidden")} data-sidebar-scroll="true">
             <div className="sidebar-console flex h-full w-full min-w-0 flex-col">
               <div className="sidebar-brand-row">
                 <button
@@ -1754,12 +1879,10 @@ function App() {
               <div className="settings-zoom-control">
                 <Button variant="outline" type="button" onClick={() => applyAppZoom((current) => current - appZoomStep)} disabled={appZoomPercent <= appZoomMin} aria-label={text.appZoomOut} title={text.appZoomOut}>
                   <ZoomOut data-icon="inline-start" />
-                  {text.appZoomOut}
                 </Button>
                 <button type="button" className="settings-zoom-percent" onClick={() => applyAppZoom(100)} aria-label={text.appZoomReset} title={text.appZoomReset}>{appZoomPercent}%</button>
                 <Button variant="outline" type="button" onClick={() => applyAppZoom((current) => current + appZoomStep)} disabled={appZoomPercent >= appZoomMax} aria-label={text.appZoomIn} title={text.appZoomIn}>
                   <ZoomIn data-icon="inline-start" />
-                  {text.appZoomIn}
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">{text.appZoomReset}: Cmd/Ctrl + 0</p>
@@ -1777,11 +1900,52 @@ function App() {
                     {text.signOut}
                   </Button>
                 </>
-              ) : text.notSignedIn}
+              ) : (
+                <>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs text-muted-foreground">GitHub</p>
+                    <p className="font-medium text-foreground">{text.notSignedIn}</p>
+                  </div>
+                  <Button type="button" className="shrink-0 gap-2" onClick={startGitHubLogin} disabled={githubOAuthLoading}>
+                    <GitBranch data-icon="inline-start" />
+                    {text.githubLoginButton}
+                  </Button>
+                </>
+              )}
             </div>
           </div>
           <DialogFooter>
             <Button onClick={() => setSettingsOpen(false)}>{text.save}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={githubOAuthOpen} onOpenChange={handleGitHubOAuthOpenChange}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{text.githubLoginTitle}</DialogTitle>
+            <DialogDescription>{text.githubLoginBody}</DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4">
+            {githubDeviceAuth ? (
+              <div className="rounded-lg border bg-muted/30 p-4 text-center">
+                <p className="mb-3 text-sm text-muted-foreground">{text.githubDeviceCodeInstruction}</p>
+                <div className="rounded-lg border bg-background px-4 py-3 font-mono text-3xl font-bold tracking-[0.32em] text-foreground">{githubDeviceAuth.user_code}</div>
+                <button type="button" className="mt-3 inline-flex text-sm font-medium text-primary hover:underline" onClick={() => void openGitHubDevicePage(githubDeviceAuth)}>
+                  {text.githubOpenDevicePage}
+                </button>
+              </div>
+            ) : null}
+            {githubOAuthMessage ? <p className="text-sm text-muted-foreground">{githubOAuthMessage}</p> : null}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={cancelGitHubOAuth}>{text.cancel}</Button>
+            {!githubDeviceAuth ? (
+              <Button onClick={startGitHubOAuthLogin} disabled={githubOAuthLoading} className="gap-2">
+                <GitBranch data-icon="inline-start" />
+                {text.githubLoginButton}
+              </Button>
+            ) : null}
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -2765,6 +2929,18 @@ function normalizeAppZoom(value: string | null): number {
   return clampAppZoom(Number(value || 100));
 }
 
+function getInitialLanguage(): Language {
+  const savedLanguage = localStorage.getItem(storageKeys.language);
+  if (savedLanguage === "zh" || savedLanguage === "en") {
+    return savedLanguage;
+  }
+  const systemLanguages = [
+    ...(navigator.languages || []),
+    navigator.language
+  ].filter(Boolean);
+  return systemLanguages.some((item) => item.toLowerCase().startsWith("zh")) ? "zh" : "en";
+}
+
 function clampAppZoom(value: number): number {
   if (!Number.isFinite(value)) return 100;
   return Math.min(appZoomMax, Math.max(appZoomMin, Math.round(value / appZoomStep) * appZoomStep));
@@ -2884,6 +3060,14 @@ function localizeGitHubAuthMessage(message: string, command: string, text: Recor
 }
 
 async function copyTextToClipboard(value: string) {
+  if (navigator.clipboard?.writeText) {
+    await Promise.race([
+      navigator.clipboard.writeText(value),
+      new Promise((_, reject) => window.setTimeout(() => reject(new Error("Copy failed.")), 500))
+    ]);
+    return;
+  }
+
   const textArea = document.createElement("textarea");
   textArea.value = value;
   textArea.setAttribute("readonly", "");
@@ -2895,19 +3079,9 @@ async function copyTextToClipboard(value: string) {
   textArea.select();
   const copied = document.execCommand("copy");
   document.body.removeChild(textArea);
-  if (copied) {
-    return;
+  if (!copied) {
+    throw new Error("Copy failed.");
   }
-
-  if (navigator.clipboard?.writeText) {
-    await Promise.race([
-      navigator.clipboard.writeText(value),
-      new Promise((_, reject) => window.setTimeout(() => reject(new Error("Copy failed.")), 500))
-    ]);
-    return;
-  }
-
-  throw new Error("Copy failed.");
 }
 
 function normalizeSearchText(value: string) {

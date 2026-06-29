@@ -7,6 +7,7 @@ const tauriConfig = JSON.parse(fs.readFileSync(new URL("../src-tauri/tauri.conf.
 const appSource = fs.readFileSync(new URL("../src/App.tsx", import.meta.url), "utf8");
 const serverSource = fs.readFileSync(new URL("../server.js", import.meta.url), "utf8");
 const tauriSource = fs.readFileSync(new URL("../src-tauri/src/lib.rs", import.meta.url), "utf8");
+const sidecarBuildSource = fs.readFileSync(new URL("../scripts/build-sidecar-runtime.js", import.meta.url), "utf8");
 
 test("desktop build prepares a Node sidecar runtime before Tauri packaging", () => {
   assert.equal(packageJson.scripts["build:sidecar"], "node scripts/build-sidecar-runtime.js");
@@ -41,4 +42,11 @@ test("server supports desktop sidecar host, random port, token, and readiness ou
   assert.match(serverSource, /process\.env\.HOST/);
   assert.match(serverSource, /process\.env\.AGENT_SMC_TOKEN/);
   assert.match(serverSource, /AGENT_SMC_READY/);
+});
+
+test("sidecar build preserves Copilot native runtime loader path", () => {
+  assert.match(sidecarBuildSource, /copyCopilotNativeRuntimeCompat/);
+  assert.match(sidecarBuildSource, /runtime\.darwin-arm64\.node/);
+  assert.match(sidecarBuildSource, /prebuilds.*darwin-arm64.*runtime\.node/s);
+  assert.match(sidecarBuildSource, /platformPart && platformPart !== "darwin-arm64"/);
 });

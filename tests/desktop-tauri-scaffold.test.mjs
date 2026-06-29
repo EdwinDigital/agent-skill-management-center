@@ -4,6 +4,7 @@ import test from "node:test";
 
 const packageJson = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8"));
 const tauriConfig = JSON.parse(fs.readFileSync(new URL("../src-tauri/tauri.conf.json", import.meta.url), "utf8"));
+const cargoToml = fs.readFileSync(new URL("../src-tauri/Cargo.toml", import.meta.url), "utf8");
 
 test("package scripts expose Tauri desktop workflows", () => {
   assert.equal(packageJson.scripts["desktop:dev"], "npx @tauri-apps/cli@latest dev");
@@ -17,9 +18,15 @@ test("Tauri desktop scaffold is present", () => {
   assert.equal(fs.existsSync(new URL("../src-tauri/src/main.rs", import.meta.url)), true);
 });
 
-test("Tauri desktop app is named Agent SMC", () => {
+test("Tauri desktop app uses Agent SMC bundle name and full window title", () => {
   assert.equal(tauriConfig.productName, "Agent SMC");
-  assert.equal(tauriConfig.app.windows[0].title, "Agent SMC");
+  assert.equal(tauriConfig.app.windows[0].title, "Agent Skills Management Center-SMC");
+});
+
+test("desktop release version is synchronized across package and Tauri metadata", () => {
+  assert.equal(packageJson.version, "1.1.1");
+  assert.equal(tauriConfig.version, packageJson.version);
+  assert.match(cargoToml, /version = "1\.1\.1"/);
 });
 
 test("Tauri bundle declares application icons", () => {

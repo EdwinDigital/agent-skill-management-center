@@ -19,6 +19,7 @@ const copiedPackages = new Set();
 for (const packageName of packageRoots) {
   copyPackageWithDependencies(packageName);
 }
+copyCopilotNativeRuntimeCompat();
 
 const sidecarPath = path.join(outputRoot, "agent-smc-sidecar");
 fs.writeFileSync(sidecarPath, `#!/usr/bin/env zsh
@@ -93,12 +94,21 @@ function copyPath(from, to) {
   });
 }
 
+function copyCopilotNativeRuntimeCompat() {
+  const source = path.join(outputRoot, "node_modules", "@github", "copilot", "prebuilds", "darwin-arm64", "runtime.node");
+  const destination = path.join(outputRoot, "node_modules", "runtime", "runtime.darwin-arm64.node");
+  if (!fs.existsSync(source)) return;
+  fs.mkdirSync(path.dirname(destination), { recursive: true });
+  fs.copyFileSync(source, destination);
+}
+
 function shouldSkipPackageFile(source) {
   const parts = source.split(path.sep);
   const skippedNames = new Set(["test", "tests", "__tests__", "docs", "doc", "example", "examples"]);
   const prebuildIndex = parts.findIndex((part) => part === "prebuilds");
   if (prebuildIndex >= 0) {
-    return parts[prebuildIndex + 1] !== "darwin-arm64";
+    const platformPart = parts[prebuildIndex + 1];
+    return Boolean(platformPart && platformPart !== "darwin-arm64");
   }
   return parts.some((part) => skippedNames.has(part));
 }

@@ -40,7 +40,7 @@ Tauri 的基本模型是：
 - [ ] Phase 6 Tauri command 迁移：尚未开始，Node sidecar 仍承担 API、SQLite、文件扫描和 Copilot SDK 能力。
 - [ ] 正式发布签名/公证/自动更新：当前 DMG 是本地测试发布包，尚未完成 Developer ID 签名、公证、staple 或自动更新签名。
 
-最近一次校验已通过：`node --test tests/*.test.mjs`（19 个测试）、`npm run check`、`cargo check --manifest-path src-tauri/Cargo.toml`、`hdiutil verify release/Agent SMC_1.0.0_aarch64.dmg`。
+最近一次校验已通过：`node --test tests/*.test.mjs`、`npm run check`、`cargo check --manifest-path src-tauri/Cargo.toml`、`hdiutil verify release/Agent SMC_1.1.1_aarch64.dmg`。
 
 ## 代码结构改进目标
 
@@ -99,6 +99,45 @@ Tauri 的基本模型是：
 6. 将 Copilot SDK 封装为独立 provider，避免 route 直接管理 session 生命周期。
 7. 所有阶段都必须能通过 `npm run check` 和至少一次关键 API/browser 验证。
 8. 不提交 `data/`、`public/dist/`、`node_modules/` 或本地运行产物。
+
+## 桌面 UI 布局与缩放规范
+
+Tauri WebView、浏览器调试页和 macOS 桌面窗口在滚动条、视口单位、固定定位和缩放行为上存在细微差异。后续 UI 调整必须遵守以下规则，避免重复出现侧栏错位、详情页宽度异常、滚动条遮挡和缩放后留白问题。
+
+### 缩放实现
+
+- 应用级缩放只使用 `--app-zoom-scale` 驱动 `.app-root { transform: scale(...) }`；不要再使用 CSS `zoom`，因为 `zoom` 会改变布局计算并导致详情页宽度和断点误判。
+- `body` 和 `#root` 保持物理视口尺寸：`width: 100vw`、`min-height: 100vh`。
+- `.app-root` 使用逻辑视口尺寸：`--app-viewport-width: calc(100vw / var(--app-zoom-scale))` 和 `--app-viewport-height: calc(100vh / var(--app-zoom-scale))`，再通过 transform 显示为目标比例。
+- 不要在 `#root`、`.app-shell`、`.detail-main` 等嵌套容器重复应用 `--app-viewport-width`。缩放补偿只应发生在 `.app-root` 这一层。
+- 修改缩放相关 CSS 时，必须验证 `tests/app-zoom.test.mjs`，并在调试浏览器中至少检查 100%、120%、140% 三档下详情页右边界不越界、不出现异常大边距。
+
+### 左侧菜单
+
+- 左侧菜单必须使用专用类 `.app-sidebar` 承载固定定位规则，不要使用 `.app-shell > aside` 这类宽泛选择器，避免误伤右侧 `SkillDocPanel`。
+- 左侧菜单固定在窗口左侧，账户栏固定在菜单底部；页面滚动时侧栏整体不应跟随主内容滚动。
+- 左侧栏内部只能让 Skill 列表区域滚动，账户栏、目录选择、扫描按钮和顶部品牌区不应被滚动带走。
+- 折叠态宽度统一使用 `--app-rail-width`；展开态宽度使用 `clamp(14.5rem, 22vw, 16rem)`，不要写散落的魔法宽度。
+
+### 右侧 Skill 定义栏
+
+- 右侧 `SkillDocPanel` 和折叠 rail 的定位规则只能写在 `.skill-doc-panel` / `.skill-doc-panel.is-collapsed` 下，不能和左侧菜单共用 `aside` 选择器。
+- 页面需要稳定预留浏览器滚动条空间，使用 CSS 原生 `scrollbar-gutter: stable`。不要用 JS 计算 `window.innerWidth - document.documentElement.clientWidth` 并写入像素偏移来规避滚动条。
+- 右侧栏默认 `right: 0`，依赖 `scrollbar-gutter` 让它贴齐内容可用区域，而不是覆盖系统滚动条。
+- 右侧折叠 rail 的宽度统一使用 `--skill-doc-rail-width`，不要与左侧 rail 宽度脱钩。
+
+### 详情页内容区
+
+- `.detail-main`、`.detail-surface`、`.detail-stack` 等主内容容器必须保持 `min-width: 0`，并用 `width: 100%` / `max-width: 100%` 限制在 grid 分配的列宽内。
+- 详情页不应自行使用 viewport 宽度参与布局；它只消费 `.app-shell` 的中间列宽。
+- 图谱、长路径、Prompt 列表等可能横向撑开的内容必须在内部 scroll area 中处理，不允许撑大 `.detail-main`。
+
+### 调试与验收
+
+- 日常 UI 调整优先用调试浏览器 `http://127.0.0.1:5173` 和 `npm run desktop:dev` 验证，不默认打包或安装 DMG。
+- 只有涉及 DMG 文件本身、安装流程、Finder 图标、签名/公证、从 DMG 运行拦截或推出问题时，才运行 `npm run desktop:build:mac` 和 `hdiutil verify`。
+- 修改布局、缩放或左右侧栏时，至少执行：`node --test tests/app-zoom.test.mjs`、`npm run check`、`npm run build`。
+- 视觉验证时至少覆盖：侧栏展开/折叠、右侧 Skill 定义栏展开/折叠、页面滚动、100%/120%/140% 缩放、详情页宽度边界。
 
 ## 推荐目标目录结构
 
@@ -559,7 +598,7 @@ picker 抽象需要把“打开选择器”和“扫描目录”拆成两个步�
   - [x] 应用退出时关闭 sidecar。
 - [x] Express server 在 desktop sidecar 模式只绑定 `127.0.0.1`。
 - [x] 增加本地握手 token，前端请求带 token header。
-- [x] macOS `.dmg` 产物输出到 `release/Agent SMC_1.0.0_aarch64.dmg`。
+- [x] macOS `.dmg` 产物输出到 `release/Agent SMC_1.1.1_aarch64.dmg`。
 - [x] DMG 文件自身 Finder 图标已通过构建后脚本处理。
 - [x] 关闭主窗口时退出应用并清理 sidecar，避免安装镜像无法推出。
 
