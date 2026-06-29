@@ -4,7 +4,7 @@ Read `AGENTS.md` first for the full project-specific agent guidance. This file i
 
 ## Project context
 
-This repository contains AI Agent Skills Console, a local-first developer web console for exploring, auditing, translating, and AI-evaluating Agent Skills. It scans local Skill roots, reads Skill definitions and file trees, renders immediate rule-based analysis, and can use GitHub Copilot SDK for model-backed complexity/ROI scores, model insights, trigger prompts, logic graphs, and Skill.md translations.
+This repository contains Agent Skill Management Center, a local-first developer web console for exploring, auditing, translating, and AI-evaluating Agent Skills. It scans local Skill roots, reads Skill definitions and file trees, renders immediate rule-based analysis, and can use GitHub Copilot SDK for model-backed complexity/ROI scores, model insights, trigger prompts, logic graphs, and Skill.md translations.
 
 Technology stack:
 - Runtime/API: Node.js, Express, native `node:sqlite` `DatabaseSync`.

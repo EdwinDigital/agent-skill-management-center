@@ -1,6 +1,6 @@
 # 项目背景
 
-这是一个本地优先的 AI Agent Skills Console，用于探索、审计、翻译和 AI 评估本机 Agent Skills。应用会扫描 Skill 根目录，读取 Skill 定义与文件树，立即展示规则分析和横向逻辑图，并可通过 GitHub Copilot SDK 生成模型驱动的复杂度、ROI、模型洞察、触发 Prompt 和 Skill.md 翻译。
+这是一个本地优先的 Agent Skill Management Center，用于探索、审计、翻译和 AI 评估本机 Agent Skills。应用会扫描 Skill 根目录，读取 Skill 定义与文件树，立即展示规则分析和横向逻辑图，并可通过 GitHub Copilot SDK 生成模型驱动的复杂度、ROI、模型洞察、触发 Prompt 和 Skill.md 翻译。
 
 技术栈：Node.js + Express + React 19 + Vite + TypeScript + Tailwind CSS v4 + shadcn/Radix UI。数据库使用 Node `node:sqlite` 的 `DatabaseSync`，默认项目相对路径为 `data/analysis.sqlite`，`data/` 不进入 Git 版本控制。生产构建输出到 `public/dist`，由 `server.js` 和 API 一起提供服务。
 

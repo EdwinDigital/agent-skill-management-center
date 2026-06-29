@@ -2,7 +2,7 @@
 
 ## 目标
 
-本项目当前是本地优先的 AI Agent Skills Console：React/Vite 前端、Express/Node API、`node:sqlite` 本地数据库，并通过 GitHub Copilot SDK 做模型分析与翻译。未来目标是将它改造成可以用 Tauri 封装和发布的桌面应用，支持 macOS 和 Windows。
+本项目当前是本地优先的 Agent Skill Management Center：React/Vite 前端、Express/Node API、`node:sqlite` 本地数据库，并通过 GitHub Copilot SDK 做模型分析与翻译。未来目标是将它改造成可以用 Tauri 封装和发布的桌面应用，支持 macOS 和 Windows。
 
 最终形态应该满足：
 
