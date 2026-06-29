@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Skill 工作台模板</title>
+  <link rel="stylesheet" href="../assets/design-tokens.css">
+  <link rel="stylesheet" href="../assets/workbench.css">
+</head>
+<body>
+  <div class="workbench-shell" data-sidebar-collapsed="false" data-doc-collapsed="true">
+    <aside class="sidebar-console" aria-label="Skill 工作台导航">
+      <button id="sidebar-expand" class="rail-button sidebar-rail" type="button" aria-label="展开侧栏" title="展开侧栏" aria-expanded="false">
+        <span aria-hidden="true">≡</span>
+        <span class="rail-label">Skill工作台</span>
+      </button>
+
+      <div class="sidebar-content" data-sidebar-content>
+        <div class="sidebar-brand-row">
+          <button class="sidebar-brand-home" type="button" title="回到总览">
+            <span class="brand-mark" aria-hidden="true">◇</span>
+            <span class="brand-copy">
+              <span class="brand-kicker">LOCAL FIRST</span>
+              <span class="brand-title">Agent Skills</span>
+              <span class="brand-subtitle">Console Template</span>
+            </span>
+          </button>
+          <button id="sidebar-collapse" class="icon-button" type="button" aria-label="折叠侧栏" title="折叠侧栏" aria-expanded="true">‹</button>
+        </div>
+
+        <section class="sidebar-actions-block" aria-label="目录操作">
+          <button class="primary-action" type="button">
+            <span class="action-icon" aria-hidden="true">⌕</span>
+            <span class="truncate">全局扫描</span>
+          </button>
+
+          <div class="nav-group">
+            <button class="nav-item is-active" type="button" aria-current="page">
+              <span aria-hidden="true">▣</span>
+              <span class="truncate">Skill 目录</span>
+              <span class="mini-badge">3</span>
+            </button>
+            <div class="directory-panel">
+              <label class="field-label" for="workbench-root">根目录</label>
+              <select id="workbench-root" class="control-input">
+                <option>Default skills: ~/.agents/skills</option>
+                <option>Copilot skills: ~/.copilot/skills</option>
+                <option>Custom skills: ./skills</option>
+              </select>
+              <div class="two-button-grid">
+                <button class="button outline" type="button">添加目录</button>
+                <button class="button destructive" type="button">删除目录</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="sidebar-section" aria-label="Skill 列表">
+          <div class="section-heading">
+            <span>Skills</span>
+            <span class="mini-badge secondary">74</span>
+          </div>
+
+          <div class="search-box">
+            <span aria-hidden="true">⌕</span>
+            <input id="skill-search" class="control-input search-input" value="frontend" aria-label="搜索 Skill" placeholder="搜索 Skill">
+            <button id="clear-search" class="search-clear" type="button" aria-label="清空搜索" title="清空搜索">×</button>
+          </div>
+
+          <div class="skill-list" role="listbox" aria-label="Skill 列表">
+            <button class="skill-row is-selected" type="button" role="option" aria-selected="true" data-skill-row>
+              <span class="skill-icon" aria-hidden="true">●</span>
+              <span class="truncate">frontend-design</span>
+              <span class="mini-badge secondary">SKILL.md</span>
+            </button>
+            <button class="skill-row" type="button" role="option" aria-selected="false" data-skill-row>
+              <span class="skill-icon" aria-hidden="true">●</span>
+              <span class="truncate">agent-customization</span>
+            </button>
+            <button class="skill-row" type="button" role="option" aria-selected="false" data-skill-row>
+              <span class="skill-icon" aria-hidden="true">●</span>
+              <span class="truncate">runtime</span>
+            </button>
+            <button class="skill-row" type="button" role="option" aria-selected="false" data-skill-row>
+              <span class="skill-icon" aria-hidden="true">●</span>
+              <span class="truncate">copilotkit-debug</span>
+            </button>
+          </div>
+
+          <div class="pagination-row">
+            <button class="button outline" type="button" disabled>上一页</button>
+            <span class="page-count">1/8</span>
+            <button class="button outline" type="button">下一页</button>
+          </div>
+        </section>
+
+        <div class="account-bar">
+          <button id="theme-toggle" class="icon-button" type="button" aria-label="切换主题" title="切换主题">☾</button>
+          <button id="settings-open" class="account-button" type="button" aria-label="打开设置">
+            <span class="avatar" aria-hidden="true">GH</span>
+            <span class="truncate">GitHub</span>
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <main class="detail-main">
+      <div class="detail-surface">
+        <section class="hero-card card">
+          <p class="eyebrow">执行地图</p>
+          <h1>Skill 设计与评估工作台</h1>
+          <p>扫描本地 Skill，阅读定义，查看规则分析，并按需触发 AI 评估。</p>
+        </section>
+
+        <section class="overview-grid">
+          <article class="card overview-card">
+            <div class="path-pill">
+              <span class="path-text">/Users/example/.agents/skills/frontend-design/SKILL.md</span>
+              <button class="copy-button" type="button" aria-label="复制路径" title="复制路径">⧉</button>
+            </div>
+            <div class="section-title">
+              <span class="tone-icon input" aria-hidden="true">◇</span>
+              <h2>frontend-design</h2>
+            </div>
+            <p class="muted">Guidance for distinctive, intentional visual design when building new UI or reshaping an existing one.</p>
+            <div class="button-row">
+              <button class="button primary" type="button">AI 评估</button>
+              <span class="status-text" aria-live="polite">规则分析已显示，模型评分待生成。</span>
+            </div>
+          </article>
+
+          <article class="card score-card">
+            <span class="tone-icon input" aria-hidden="true">B</span>
+            <span class="score-label">复杂度</span>
+            <strong class="score-value">—</strong>
+            <span class="score-meta">未评估</span>
+          </article>
+
+          <article class="card score-card">
+            <span class="tone-icon model" aria-hidden="true">R</span>
+            <span class="score-label">ROI</span>
+            <strong class="score-value">—</strong>
+            <span class="score-meta">等待模型返回</span>
+          </article>
+        </section>
+
+        <section class="pair-grid">
+          <article class="card panel-card">
+            <div class="card-header-row">
+              <div class="section-title compact">
+                <span class="tone-icon model" aria-hidden="true">✦</span>
+                <h2>模型洞察</h2>
+              </div>
+              <span class="mini-badge secondary">规则分析</span>
+            </div>
+            <div class="scroll-panel insight-panel">
+              <p>AI 评估后，这里展示模型对触发条件、边界、工具依赖和复用价值的判断。长内容在卡片内滚动，不拉高整页。</p>
+            </div>
+          </article>
+
+          <article class="card panel-card">
+            <div class="card-header-row">
+              <div class="section-title compact">
+                <span class="tone-icon input" aria-hidden="true">?</span>
+                <h2>触发 Prompt</h2>
+              </div>
+              <button class="button outline" type="button">复制</button>
+            </div>
+            <div class="prompt-list">
+              <div class="prompt-row">
+                <p>帮我设计一个不模板化的前端工作台。</p>
+                <button class="copy-button" type="button" aria-label="复制 Prompt">⧉</button>
+              </div>
+              <div class="prompt-row">
+                <p>检查这个 UI 是否符合控制台设计标准。</p>
+                <button class="copy-button" type="button" aria-label="复制 Prompt">⧉</button>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="graph-grid">
+          <article class="card panel-card graph-card">
+            <div class="card-header-row">
+              <div class="section-title compact">
+                <span class="tone-icon method" aria-hidden="true">⌘</span>
+                <h2>逻辑图</h2>
+              </div>
+              <span class="mini-badge">5 nodes · 4 edges</span>
+            </div>
+            <div class="graph-frame">
+              <div class="graph-toolbar">
+                <span>横向滚动 · 拖拽画布 · 选择节点查看证据</span>
+              </div>
+              <div class="graph-scroll">
+                <svg class="graph-lines" viewBox="0 0 720 280" aria-hidden="true">
+                  <defs>
+                    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+                      <path d="M1,1 L9,5 L1,9 Z"></path>
+                    </marker>
+                  </defs>
+                  <path d="M 130 90 C 180 90 190 90 240 90"></path>
+                  <path d="M 370 90 C 410 90 420 48 470 48"></path>
+                  <path d="M 370 90 C 410 90 420 138 470 138"></path>
+                  <path d="M 600 92 C 640 92 650 92 690 92"></path>
+                </svg>
+                <button class="graph-node is-selected" type="button" style="left: 32px; top: 46px;">
+                  <span>INPUT</span>
+                  <strong>Intent</strong>
+                  <small>用户请求和触发语义</small>
+                </button>
+                <button class="graph-node decision" type="button" style="left: 240px; top: 46px;">
+                  <span>CHECK</span>
+                  <strong>Applies?</strong>
+                  <small>匹配 skill 描述和边界</small>
+                </button>
+                <button class="graph-node method" type="button" style="left: 470px; top: 8px;">
+                  <span>METHOD</span>
+                  <strong>Plan</strong>
+                  <small>形成实施步骤</small>
+                </button>
+                <button class="graph-node tool" type="button" style="left: 470px; top: 124px;">
+                  <span>TOOL</span>
+                  <strong>Run</strong>
+                  <small>调用工具验证</small>
+                </button>
+                <button class="graph-node" type="button" style="left: 690px; top: 46px;">
+                  <span>OUTPUT</span>
+                  <strong>Result</strong>
+                  <small>交付文档和证据</small>
+                </button>
+              </div>
+              <div class="zoom-controls" aria-label="图谱缩放">
+                <button id="zoom-out" class="icon-button" type="button" aria-label="缩小" title="缩小">−</button>
+                <span id="zoom-label">100%</span>
+                <button id="zoom-in" class="icon-button" type="button" aria-label="放大" title="放大">＋</button>
+                <button id="zoom-reset" class="icon-button" type="button" aria-label="重置缩放" title="重置缩放">↺</button>
+              </div>
+            </div>
+          </article>
+
+          <article class="card panel-card node-detail-card">
+            <div class="section-title compact">
+              <span class="tone-icon input" aria-hidden="true">◇</span>
+              <h2>Intent</h2>
+            </div>
+            <p class="muted">选择图谱节点后，在这里展示节点职责、证据和下游执行路径。</p>
+            <div class="evidence-box">用户希望把当前项目的 UI 设计整理成可复用模板。</div>
+          </article>
+        </section>
+      </div>
+    </main>
+
+    <aside class="doc-panel is-collapsed" aria-label="Skill 定义详情">
+      <button id="doc-expand" class="rail-button doc-rail" type="button" aria-label="展开 Skill 定义详情" title="展开 Skill 定义详情" aria-expanded="false">
+        <span aria-hidden="true">›</span>
+        <span class="rail-label">Skill定义</span>
+      </button>
+
+      <div class="doc-card card" data-doc-content>
+        <div class="doc-header">
+          <div class="section-title compact">
+            <span class="tone-icon document" aria-hidden="true">D</span>
+            <h2>Skill 定义详情</h2>
+          </div>
+          <button id="doc-collapse" class="icon-button" type="button" aria-label="折叠 Skill 定义详情" title="折叠 Skill 定义详情">›</button>
+          <div class="doc-tabs" role="tablist" aria-label="Skill 定义详情">
+            <button class="doc-tab is-active" type="button" role="tab" aria-selected="true" data-tab="skill">SKILL.md</button>
+            <button class="doc-tab" type="button" role="tab" aria-selected="false" data-tab="files">文件目录</button>
+          </div>
+        </div>
+
+        <div class="doc-body" data-panel="skill">
+          <button class="button outline" type="button">翻译 Skill.md</button>
+          <div class="markdown-preview">
+            <h3>frontend-design</h3>
+            <p>Guidance for distinctive, intentional visual design when building new UI or reshaping an existing one.</p>
+            <blockquote>Use semantic tokens, compact cards, independent scroll areas, and controlled side panels.</blockquote>
+            <pre><code>Button: default | outline | ghost | destructive
+Card: header | content | action | footer</code></pre>
+          </div>
+        </div>
+
+        <div class="doc-body hidden" data-panel="files">
+          <div class="file-summary">12 files · 3 folders</div>
+          <div class="file-tree">
+            <div class="file-row directory"><span>⌄</span><span>▣</span><span class="truncate">references</span></div>
+            <div class="file-row nested"><span></span><span>◇</span><span class="truncate">visual-language.md</span></div>
+            <div class="file-row"><span></span><span>◇</span><span class="truncate">SKILL.md</span></div>
+            <div class="file-row"><span></span><span>◇</span><span class="truncate">examples.json</span></div>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <div id="settings-dialog" class="dialog-root" aria-hidden="true">
+    <div class="dialog-overlay" data-dialog-close></div>
+    <section class="dialog-content" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <div class="dialog-header">
+        <h2 id="settings-title">设置</h2>
+        <p>显示语言、默认模型和账号状态集中管理。</p>
+      </div>
+      <div class="settings-grid">
+        <label class="field-label" for="display-language">显示语言</label>
+        <select id="display-language" class="control-input"><option>中文</option><option>English</option></select>
+        <label class="field-label" for="default-model">默认模型</label>
+        <select id="default-model" class="control-input"><option>github-default</option><option>gpt-5-mini</option></select>
+      </div>
+      <div class="dialog-footer">
+        <button class="button outline" type="button" data-dialog-close>取消</button>
+        <button class="button primary" type="button" data-dialog-close>保存</button>
+      </div>
+    </section>
+  </div>
+
+  <script src="../assets/workbench.js"></script>
+</body>
+</html>

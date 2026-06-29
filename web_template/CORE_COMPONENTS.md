@@ -1,194 +1,139 @@
 # 核心组件契约
 
-本文定义从 `main` 分支 AI Agent Skills Console 提取出的可复用组件边界。模板中的 HTML/CSS/JS 是静态示例；在 React、Vue 或其他框架中实现时，应保持这些职责和状态接口，而不是复制 DOM 操作。
+本文定义模板项目的组件边界、状态 owner 和职责限制。无论使用静态 HTML、React、Vue 还是其他框架，都应保持这些边界。
 
-## 组件拆分原则
+## 命名约定
 
-- Shell 只负责布局：Header、LeftMenu、MainContent、SkillDocPanel、DialogLayer。
-- 全局状态集中管理：theme、language、account、settings、collapsed panels。
-- 业务状态下沉到业务页面：rootId、skills、search、page、selectedSkill、selectedNode、analysis、translation。
-- 组件通过 props、events 或 store 通信，不直接查询兄弟组件 DOM。
-- 视觉层使用语义 token，不在组件里硬编码主题色。
-- 不在 LeftMenu 放用户身份、下载入口、产品推广或与当前业务无关的导航。
+- `AppShell`：整体三栏布局。
+- `SidebarConsole`：左侧输入源和列表。
+- `DetailSurface`：主工作面。
+- `GraphCanvas`：逻辑图。
+- `DocPanel`：右侧文档上下文。
+- `DialogLayer`：短流程浮层。
 
 ## AppShell
 
-职责：定义全局网格、层级和折叠状态。
+职责：定义三栏网格、折叠状态和整体层级。
 
-状态接口：
-- `sidebarCollapsed: boolean`
-- `skillDocCollapsed: boolean`
-- `skillDocVisible: boolean`
+状态：
+- `sidebarCollapsed`
+- `docCollapsed`
 
-DOM/CSS 契约：
-- 根容器使用 `.app-shell`。
-- 折叠状态使用 `data-sidebar-collapsed`、`data-skill-doc-collapsed`。
-- 主内容列始终为 `minmax(0, 1fr)`。
-- 左右折叠轨宽度统一为 `--rail-width`。
+规则：
+- 根容器使用 `.workbench-shell`。
+- 折叠状态使用 `data-sidebar-collapsed` 和 `data-doc-collapsed`。
+- 主列始终为 `minmax(0, 1fr)`。
+- Shell 不读取业务数据，不发起 API 请求。
+- Shell 只把状态传给子组件，不持有业务对象详情。
 
-不得承担：业务数据读取、用户认证、模型调用、文件扫描。
+## SidebarConsole
 
-## TopNav
+职责：管理输入源、搜索、列表、分页和全局轻量入口。
 
-职责：显示产品标识、应用标题、全局动作和用户入口。
-
-输入：
-- `title`
+状态：
+- `rootId`
+- `searchValue`
+- `selectedItemId`
+- `page`
 - `theme`
 - `accountStatus`
-- `onThemeToggle`
-- `onOpenSettings`
-- `onUserMenuToggle`
 
 规则：
-- 只放全局动作：主题、设置、GitHub 账号。
-- 用户信息只出现在 TopNav，不重复放在 LeftMenu。
-- 图标按钮必须有 `aria-label` 和 `title`。
-- 用户菜单使用 `aria-haspopup="menu"` 和 `aria-expanded`。
-- Header 高度固定为 `--app-header-height`，避免页面跳动。
+- Brand 区可返回总览。
+- 主操作按钮只保留一个最高频动作。
+- 搜索框提供清空按钮。
+- 列表使用 `role="listbox"`、`role="option"` 和 `aria-selected`。
+- 折叠时只显示 rail，不清空状态。
+- 不渲染右侧文档和主区分析内容。
+- 不发起当前对象的分析请求。
 
-不得承担：设置表单内容、左侧菜单折叠逻辑、右侧上下文切换逻辑。
+## DetailSurface
 
-## LeftMenu
+职责：展示当前对象的概览、状态、AI 操作、洞察、Prompt、图谱和工具信息。
 
-职责：承载 Skill 输入源、搜索、分页列表和目录操作。
-
-输入：
-- `collapsed`
-- `roots`
-- `rootId`
-- `skills`
-- `selectedSkillName`
-- `searchValue`
-- `page`
-- `totalPages`
-- `loadingRoot`
-- `onCollapsedChange`
-- `onRootChange`
-- `onAddDirectory`
-- `onScanDirectories`
-- `onDeleteDirectory`
-- `onSearchChange`
-- `onSelectSkill`
-- `onPageChange`
-
-规则：
-- 折叠后显示窄轨按钮和竖排标签。
-- 内容滚动独立于 MainContent。
-- 操作按卡片分组：目录来源、搜索列表、分页。
-- 危险操作使用 destructive 样式。
-- 列表项和路径必须 `min-width: 0` 并处理溢出。
-- 不展示用户信息，不展示桌面端下载/引导入口，不加入当前业务没有的导航项。
-
-不得承担：右侧文档渲染、设置弹窗、主内容业务计算、账号菜单。
-
-## MainContent
-
-职责：展示当前 Skill 的规则分析、模型分析、逻辑图和执行面。
-
-输入：
-- `selectedSkill`
-- `selectedNode`
-- `graph`
-- `modelAnalysis`
+状态：
+- `selectedItem`
 - `evaluationStatus`
-- `generatingMap`
-- `onGenerateAnalysis`
-- `onSelectNode`
+- `analysis`
+- `selectedGraphNode`
 
 规则：
-- 未选择 Skill 时显示空态引导。
-- 选中 Skill 后显示概览、复杂度、ROI、模型洞察、触发 Prompt、逻辑图、节点详情、工具栈、运行方法。
-- AI 评估按钮只在当前 Skill 概览区出现。
-- 图谱容器可横向滚动，节点文字必须防溢出。
+- 当前对象路径单独成行，复制按钮固定在右侧。
+- AI 操作只放在当前对象概览区域。
+- 分数没有模型结果时显示未评估。
+- 洞察、工具和长文本使用局部滚动，不撑高整页。
+- 不管理目录选择、搜索或文档 tab。
+- 不直接修改 `DocPanel` 内部 tab 状态。
 
-不得承担：根目录选择、设置项保存、文档 panel tab 状态。
+## GraphCanvas
 
-## SkillDocPanel
+职责：渲染逻辑图，并支持选择、拖拽和缩放。
 
-职责：显示当前 Skill 的上下文详情，例如 Skill.md、翻译内容、文件树。
-
-输入：
-- `visible`
-- `collapsed`
-- `selectedSkill`
-- `mode`
-- `content`
-- `fileTree`
-- `hasTranslation`
-- `translating`
-- `onCollapsedChange`
-- `onToggleMode`
-- `onTabChange`
+状态：
+- `selectedNodeId`
+- `zoom`
+- `isDragging`
 
 规则：
-- 未选中 Skill 时不渲染。
-- 折叠后保留窄轨按钮，包含图标和竖排标签。
-- tabs 只改变右侧上下文，不改变左侧选中项。
-- 长文档区域使用独立滚动容器。
-- 翻译是上下文动作，不改变原始 Skill 数据。
+- 图谱容器独立滚动。
+- 节点固定尺寸，文本防溢出。
+- 点击节点只改变选中节点。
+- 拖拽画布时不触发节点点击。
+- 缩放控件固定在图谱内部右下角。
+- 不生成图谱数据。
+- 不读取文档内容，不发起 AI 请求。
 
-不得承担：全局设置、认证、左侧筛选、主内容布局计算。
+## DocPanel
 
-## Dialog
+职责：显示当前对象的文档、翻译内容和文件树。
 
-职责：短流程浮层，例如设置、添加目录确认、认证提示。
-
-结构：
-- `DialogHeader`: 标题和说明。
-- `DialogBody`: 表单或确认信息。
-- `DialogFooter`: 取消、确认和保存按钮。
-
-规则：
-- Dialog 内容层级高于 Header 和侧栏。
-- Dialog 内嵌 Select、Combobox 或 Popover 时，需要外部点击保护，避免 Portal 内容被当作 Dialog 外点击。
-- Footer 主按钮文案描述实际动作。
-- 长流程不要塞进 Dialog，应进入独立页面或右侧面板。
-
-## UserSettings
-
-职责：承载全局用户设置和账号状态。
-
-字段建议：
-- displayLanguage
-- theme
-- defaultModel
-- accountStatus
+状态：
+- `activeTab`
+- `docMode`
+- `expandedPaths`
 
 规则：
-- 从 TopNav 打开，以 Dialog 呈现。
-- 表单字段使用受控状态，保存时统一写入 localStorage 或后端配置。
-- 模型列表应有页面会话缓存，避免反复打开设置重复请求。
-- 账号状态只展示必要信息，不把认证流程塞入基础设置组件。
+- 没有选中对象时可以折叠或不渲染。
+- Tabs 只切换文档面板内部上下文。
+- 翻译是视图模式，不覆盖原文。
+- 文档和文件树都有独立滚动。
+- 不改变左侧列表选择。
+- 不改变 `DetailSurface` 的图谱选中节点。
 
-## Card / Button / Badge
+## DialogLayer
 
-职责：提供稳定的基础视觉构件。
+职责：承载设置、确认、认证提示等短流程。
 
 规则：
-- Card 暴露 header、title、description、action、content、footer 插槽。
-- Button 使用 variant 和 size 控制样式，不新增一次性按钮 class。
-- 图标通过 `data-icon="inline-start"` 或 `data-icon="inline-end"` 标记位置。
-- Badge 只表达短状态，不承载长句说明。
+- Dialog 有标题和明确的确认按钮。
+- 表单字段使用受控状态。
+- 长流程不要放进 Dialog。
+- 浮层层级高于左右面板。
+- Dialog 关闭不应重置页面主状态，除非用户明确确认操作。
 
-## 状态与持久化建议
+## 基础组件
 
-| 状态 | 建议 owner | 持久化 |
-|---|---|---|
-| theme | AppShell / Settings store | localStorage |
-| language | Settings store | localStorage |
-| sidebarCollapsed | AppShell | localStorage |
-| skillDocCollapsed | AppShell | localStorage |
-| selectedSkill | 业务页面 | 组件状态或 URL |
-| skillDocMode | SkillDocPanel | 组件状态 |
-| remote options cache | 数据服务层 | 页面会话内存 |
+- Card：信息单元，避免嵌套。
+- Button：只通过 variant 和 size 表达语义。
+- Badge：短状态、数量、标签。
+- Input / Select：用于搜索、命名和有限选项。
+- Tabs：只用于局部上下文切换。
+- ScrollPanel：用于文档、洞察、工具列表和图谱。
 
-## 可访问性清单
+基础组件不直接读取业务数据，只通过 props、属性或插槽接收内容。
 
-- 所有图标按钮都有 `aria-label`。
-- 折叠按钮有 `aria-expanded`。
-- 用户菜单有 `role="menu"` 和 `role="menuitem"`。
-- 列表有 `role="listbox"`、`role="option"`、`aria-selected`。
-- Tabs 有 `role="tablist"`、`role="tab"`、`aria-selected`。
-- Dialog 有标题和说明，关闭按钮有屏幕阅读器文本。
-- 颜色状态同时有文本、符号或图标提示。
+## 状态归属
+
+| 状态 | Owner |
+|---|---|
+| theme | AppShell 或 Settings |
+| sidebarCollapsed | AppShell |
+| docCollapsed | AppShell |
+| rootId | SidebarConsole |
+| searchValue | SidebarConsole |
+| selectedItem | 业务页面 / DetailSurface |
+| selectedGraphNode | DetailSurface / GraphCanvas |
+| graphZoom | GraphCanvas |
+| doc activeTab | DocPanel |
+| fileTree expandedPaths | DocPanel |
+| remote cache | 数据服务层 |
