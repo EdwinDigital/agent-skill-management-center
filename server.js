@@ -9,6 +9,7 @@ import { expandHomePath, normalizeScanPath } from "./core/utils/paths.js";
 import {
   createServerConfig
 } from "./server/config.js";
+import { canWriteJsonResponse, sendJsonIfWritable } from "./server/http-response.js";
 import { promisify } from "node:util";
 import { initializeDatabase, seedCurrentDefaultSkillRoot } from "./setup/database.js";
 import { supportedAgentSkillDirectories } from "./setup/default-skill-directories.js";
@@ -226,7 +227,7 @@ app.get("/api/models", async (request, response) => {
     try {
       await withTimeout(client.start(), 10_000, "Timed out while starting Copilot SDK runtime.");
       const models = await withTimeout(client.listModels(), 10_000, "Timed out while listing Copilot models.");
-      response.json({
+      sendJsonIfWritable(response, request, {
         source: "copilot-sdk",
         models: normalizeModels(models)
       });
@@ -234,6 +235,9 @@ app.get("/api/models", async (request, response) => {
       await stopCopilotClient(client);
     }
   } catch (error) {
+    if (!canWriteJsonResponse(response, request)) {
+      return;
+    }
     logServerError(error, { request, status: 200, scope: "models-fallback" });
     const authGuide = error?.authGuide || (isCopilotSdkAuthError(error) ? buildGitHubAuthGuide({ authenticated: false, needsCopilotScope: false, cliInstalled: true, tokenAvailable: false }) : null);
     const authPayload = authGuide ? {
@@ -241,7 +245,7 @@ app.get("/api/models", async (request, response) => {
       authCommand: authGuide.command || error.authStatus?.command || "gh auth login --web && gh auth refresh --scopes copilot",
       authHelp: authGuide.message || error.authStatus?.message || "Sign in with GitHub CLI and refresh the Copilot OAuth scope."
     } : {};
-    response.json({
+    sendJsonIfWritable(response, request, {
       source: "fallback",
       ...authPayload,
       error: error.message,

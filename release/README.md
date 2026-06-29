@@ -20,5 +20,6 @@ Current desktop scope:
 
 - React/Vite is used as the Tauri WebView UI.
 - The first scaffold keeps the existing web build path: `public/dist`.
-- The Node/Express API sidecar is not yet bundled; that belongs to the later sidecar phase described in `REFACTOR.md`.
+- The Node/Express API sidecar is bundled as a Tauri resource under `sidecar-node` and started by the desktop shell on a random local port.
+- Generated DMG artifacts are copied here for manual distribution; `release/*.dmg` remains ignored by Git.
 - macOS signing, notarization, stapling, and updater signing remain release pipeline tasks.

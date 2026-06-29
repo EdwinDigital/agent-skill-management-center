@@ -25,6 +25,15 @@ test("Rust app starts the sidecar and injects the API endpoint into the webview"
   assert.match(tauriSource, /AGENT_SMC_READY/);
 });
 
+test("desktop API endpoint can be recovered after a webview reload", () => {
+  assert.match(tauriSource, /struct DesktopApiEndpoint/);
+  assert.match(tauriSource, /struct DesktopApiState/);
+  assert.match(tauriSource, /fn get_desktop_api_endpoint\(state: tauri::State<'_, DesktopApiState>\)/);
+  assert.match(tauriSource, /tauri::generate_handler!\[set_app_zoom, get_desktop_api_endpoint\]/);
+  assert.match(appSource, /readDesktopApiEndpointFromTauri/);
+  assert.match(appSource, /invoke<DesktopApiEndpoint>\("get_desktop_api_endpoint"\)/);
+});
+
 test("Rust app refuses to run directly from a mounted DMG volume", () => {
   assert.match(tauriSource, /ensure_not_running_from_dmg/);
   assert.match(tauriSource, /is_running_from_mounted_volume/);
@@ -36,6 +45,8 @@ test("frontend fetchJson uses the injected desktop API endpoint and token", () =
   assert.match(appSource, /__AGENT_SMC_API_BASE_URL__/);
   assert.match(appSource, /__AGENT_SMC_API_TOKEN__/);
   assert.match(appSource, /resolveApiUrl/);
+  assert.match(appSource, /isDesktopRuntime\(\)/);
+  assert.doesNotMatch(appSource, /window\.location\.protocol !== "tauri:"/);
 });
 
 test("server supports desktop sidecar host, random port, token, and readiness output", () => {

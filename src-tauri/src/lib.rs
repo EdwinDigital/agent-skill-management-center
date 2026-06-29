@@ -7,7 +7,19 @@ use std::{
 
 use tauri::{Manager, WebviewWindow, WindowEvent};
 
+const APP_WINDOW_TITLE: &str = "Agent Skills Management Center-SMC";
+const DEV_WINDOW_TITLE: &str = "Agent Skills Management Center-SMC 「DEV」";
+
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DesktopApiEndpoint {
+    api_base_url: String,
+    api_token: String,
+}
+
 struct SidecarProcess(Mutex<Option<Child>>);
+
+struct DesktopApiState(DesktopApiEndpoint);
 
 impl Drop for SidecarProcess {
     fn drop(&mut self) {
@@ -22,6 +34,7 @@ impl Drop for SidecarProcess {
 
 pub fn run() {
     tauri::Builder::default()
+        .invoke_handler(tauri::generate_handler![set_app_zoom, get_desktop_api_endpoint])
         .setup(|app| {
             if !ensure_not_running_from_dmg(app)? {
                 return Ok(());
@@ -29,7 +42,12 @@ pub fn run() {
 
             let (api_base_url, api_token, child) = start_sidecar(app)?;
             app.manage(SidecarProcess(Mutex::new(Some(child))));
+            app.manage(DesktopApiState(DesktopApiEndpoint {
+                api_base_url: api_base_url.clone(),
+                api_token: api_token.clone(),
+            }));
             if let Some(window) = app.get_webview_window("main") {
+                apply_development_window_title(&window)?;
                 inject_api_endpoint(&window, &api_base_url, &api_token)?;
             }
             Ok(())
@@ -41,6 +59,26 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running Agent SMC");
+}
+
+#[tauri::command]
+fn set_app_zoom(window: WebviewWindow, scale_factor: f64) -> tauri::Result<()> {
+    let scale_factor = scale_factor.clamp(0.8, 1.4);
+    window.set_zoom(scale_factor)
+}
+
+#[tauri::command]
+fn get_desktop_api_endpoint(state: tauri::State<'_, DesktopApiState>) -> DesktopApiEndpoint {
+    state.0.clone()
+}
+
+fn apply_development_window_title(window: &WebviewWindow) -> tauri::Result<()> {
+    if cfg!(debug_assertions) {
+        window.set_title(DEV_WINDOW_TITLE)?;
+    } else {
+        window.set_title(APP_WINDOW_TITLE)?;
+    }
+    Ok(())
 }
 
 fn ensure_not_running_from_dmg(app: &tauri::App) -> Result<bool, Box<dyn std::error::Error>> {

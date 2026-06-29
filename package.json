@@ -1,6 +1,6 @@
 {
   "name": "skill-logic-visualizer",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "A local web app for visualizing Skill execution logic and tool usage.",
   "type": "module",
   "scripts": {

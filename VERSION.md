@@ -2,9 +2,19 @@
 
 ## Current Version
 
-**Agent Skill Management Center Version 1.1.1**
+**Agent Skill Management Center Version 1.1.2**
 
-Package version: `1.1.1`
+Package version: `1.1.2`
+
+## Version 1.1.2 Scope
+
+Version 1.1.2 is a desktop stability patch. It includes:
+
+- Recovery of the Tauri sidecar API endpoint and token after WebView reloads, preventing desktop API calls from waiting for a missing injected global.
+- Faster desktop Skill detail loading after Vite/HMR reloads by avoiding repeated API base URL wait time.
+- Restored live Copilot model list loading in the desktop shell after sidecar endpoint recovery.
+- Tauri WebView visual crispness fixes that remove ordinary UI CSS transforms from dialogs, selects, buttons, and sidebar controls.
+- Left/right collapsed rail style parity and corrected left sidebar expand/collapse hit areas.
 
 ## Version 1.0 Scope
 

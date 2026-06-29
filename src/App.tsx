@@ -15,12 +15,14 @@ import {
   Languages,
   LogOut,
   MessageSquareText,
+  Minus,
   Moon,
   Network,
   PanelLeftClose,
   PanelLeftOpen,
   PanelRightClose,
   PanelRightOpen,
+  Plus,
   RotateCcw,
   RefreshCw,
   Route,
@@ -76,11 +78,19 @@ import { cn } from "@/lib/utils";
 
 type Language = "en" | "zh";
 type Theme = "light" | "dark";
+type DesktopApiEndpoint = {
+  apiBaseUrl?: string;
+  apiToken?: string;
+};
 
 declare global {
   interface Window {
     __AGENT_SMC_API_BASE_URL__?: string;
     __AGENT_SMC_API_TOKEN__?: string;
+    __TAURI__?: {
+      core?: { invoke<T = unknown>(command: string, args?: Record<string, unknown>): Promise<T> };
+      tauri?: { invoke<T = unknown>(command: string, args?: Record<string, unknown>): Promise<T> };
+    };
   }
 }
 
@@ -266,7 +276,7 @@ type PendingDirectory = {
 const defaultSkillPageSize = 10;
 const minSkillPageSize = 1;
 const maxSkillPageSize = 18;
-const skillRowPitch = 39;
+const skillRowPitch = 42;
 const graphMinZoom = 0.6;
 const graphMinAutoZoom = 0.6;
 const graphMaxZoom = 1.6;
@@ -619,6 +629,7 @@ function App() {
   const settingsModelsRequestRef = useRef(0);
   const settingsModelsLoadedRef = useRef(false);
   const githubOAuthTimerRef = useRef<number | null>(null);
+  const appZoomPercentRef = useRef(appZoomPercent);
 
   const text = copy[language];
   const evaluationProgressText = evaluationStatus;
@@ -633,14 +644,14 @@ function App() {
   const visibleSkills = filteredSkills.slice((page - 1) * skillPageSize, page * skillPageSize);
 
   function applyAppZoom(valueOrUpdater: number | ((current: number) => number), options: { notify?: boolean } = {}) {
-    setAppZoomPercent((current) => {
-      const rawNext = typeof valueOrUpdater === "function" ? valueOrUpdater(current) : valueOrUpdater;
-      const next = clampAppZoom(rawNext);
-      if (options.notify && next !== current) {
-        toast.message(`${text.zoomPercent}: ${next}%`);
-      }
-      return next;
-    });
+    const current = appZoomPercentRef.current;
+    const rawNext = typeof valueOrUpdater === "function" ? valueOrUpdater(current) : valueOrUpdater;
+    const next = clampAppZoom(rawNext);
+    if (options.notify && next !== current) {
+      toast.message(`${text.zoomPercent}: ${next}%`);
+    }
+    appZoomPercentRef.current = next;
+    setAppZoomPercent(next);
   }
 
   useEffect(() => {
@@ -654,9 +665,12 @@ function App() {
   }, [theme]);
 
   useEffect(() => {
+    appZoomPercentRef.current = appZoomPercent;
+    const scaleFactor = appZoomPercent / 100;
     document.documentElement.style.setProperty("--app-zoom", `${appZoomPercent}%`);
-    document.documentElement.style.setProperty("--app-zoom-scale", String(appZoomPercent / 100));
+    document.documentElement.style.setProperty("--app-zoom-scale", isDesktopRuntime() ? "1" : String(scaleFactor));
     localStorage.setItem(storageKeys.appZoom, String(appZoomPercent));
+    void setDesktopWebviewZoom(scaleFactor);
   }, [appZoomPercent]);
 
   useEffect(() => () => clearGitHubOAuthTimer(), []);
@@ -718,7 +732,7 @@ function App() {
       const bottomPadding = sectionStyle ? Number.parseFloat(sectionStyle.paddingBottom) || 0 : 0;
       const listToPaginationGap = showSkillPagination && sectionStyle ? Number.parseFloat(sectionStyle.rowGap) || 0 : 0;
       const availableHeight = sectionRect.bottom - bottomPadding - listRect.top - paginationHeight - listToPaginationGap;
-      const nextPageSize = Math.min(maxSkillPageSize, Math.max(minSkillPageSize, Math.floor((availableHeight + 8) / skillRowPitch)));
+      const nextPageSize = Math.min(maxSkillPageSize, Math.max(minSkillPageSize, Math.floor(availableHeight / skillRowPitch)));
       setSkillPageSize((current) => current === nextPageSize ? current : nextPageSize);
     }
 
@@ -802,7 +816,7 @@ function App() {
       void syncGitHubStatusOnStartup();
       const firstRoot = rootsResult.roots?.[0];
       if (firstRoot) {
-        await loadSkillsFromServer(firstRoot);
+        await loadSkillsFromServer(firstRoot, { notify: false });
       } else {
         setPathHint(text.noScannedDirectories);
       }
@@ -1113,7 +1127,7 @@ function App() {
     setEvaluationStatus(text.rulesEvaluationPrompt);
   }
 
-  async function loadSkillsFromServer(root: SkillRoot) {
+  async function loadSkillsFromServer(root: SkillRoot, options: { notify?: boolean } = {}) {
     setLoadingSkillList(true);
     setPathHint(text.readingRoot);
     try {
@@ -1125,7 +1139,9 @@ function App() {
       setSkillTranslation(null);
       setSkillDocMode("original");
       setPathHint(text.loadedServer);
-      toast.success(`${text.skills}: ${result.skills.length}`);
+      if (options.notify !== false) {
+        toast.success(`${text.skills}: ${result.skills.length}`);
+      }
     } catch (error) {
       notifyError(error);
     } finally {
@@ -1429,7 +1445,7 @@ function App() {
             aria-label={text.expandSidebar}
             title={text.expandSidebar}
             className={cn(
-              "flex h-full w-full flex-col items-center gap-2 px-1 py-3 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
+              "sidebar-rail",
               !sidebarCollapsed && "hidden"
             )}
           >
@@ -1526,7 +1542,7 @@ function App() {
                       type="button"
                       variant="ghost"
                       size="icon-sm"
-                      className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      className="absolute right-1.5 top-1.5 text-muted-foreground hover:text-foreground"
                       onClick={() => setSkillSearch("")}
                       aria-label={text.clearSearch}
                       title={text.clearSearch}
@@ -1877,12 +1893,12 @@ function App() {
             <div className="flex flex-col gap-2">
               <label className="flex items-center gap-2 text-sm font-medium"><ZoomIn className="size-4" />{text.zoomPercent}</label>
               <div className="settings-zoom-control">
-                <Button variant="outline" type="button" onClick={() => applyAppZoom((current) => current - appZoomStep)} disabled={appZoomPercent <= appZoomMin} aria-label={text.appZoomOut} title={text.appZoomOut}>
-                  <ZoomOut data-icon="inline-start" />
+                <Button variant="outline" size="icon-sm" type="button" onClick={() => applyAppZoom((current) => current - appZoomStep)} disabled={appZoomPercent <= appZoomMin} aria-label={text.appZoomOut} title={text.appZoomOut}>
+                  <Minus data-icon="inline-start" />
                 </Button>
                 <button type="button" className="settings-zoom-percent" onClick={() => applyAppZoom(100)} aria-label={text.appZoomReset} title={text.appZoomReset}>{appZoomPercent}%</button>
-                <Button variant="outline" type="button" onClick={() => applyAppZoom((current) => current + appZoomStep)} disabled={appZoomPercent >= appZoomMax} aria-label={text.appZoomIn} title={text.appZoomIn}>
-                  <ZoomIn data-icon="inline-start" />
+                <Button variant="outline" size="icon-sm" type="button" onClick={() => applyAppZoom((current) => current + appZoomStep)} disabled={appZoomPercent >= appZoomMax} aria-label={text.appZoomIn} title={text.appZoomIn}>
+                  <Plus data-icon="inline-start" />
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">{text.appZoomReset}: Cmd/Ctrl + 0</p>
@@ -2592,7 +2608,7 @@ function GraphCanvas({ graph, selectedNode, onSelectNode, hint, labels }: { grap
           <ScrollBar orientation="horizontal" />
           <ScrollBar />
         </ScrollArea>
-        <div className="absolute bottom-4 right-4 flex items-center gap-1 rounded-lg border bg-background/95 p-1 shadow-lg backdrop-blur">
+        <div className="absolute bottom-4 right-4 flex items-center gap-1 rounded-lg border bg-background/95 p-1 shadow-lg">
           <Button type="button" variant="ghost" size="icon-sm" aria-label={labels.zoomOut} title={labels.zoomOut} onClick={zoomOut} disabled={zoomOutDisabled}>
             <ZoomOut data-icon="inline-start" />
           </Button>
@@ -2787,14 +2803,13 @@ function AdaptiveTooltip({ children, content, align = "center" }: { children: Re
     const showBelow = topSpace < estimatedHeight + gap + 12;
     const preferredLeft = align === "end" ? rect.right - width : rect.left + rect.width / 2 - width / 2;
     const left = Math.min(window.innerWidth - width - 16, Math.max(16, preferredLeft));
-    const top = showBelow ? Math.min(window.innerHeight - 16, rect.bottom + gap) : Math.max(16, rect.top - gap);
+    const top = showBelow ? Math.min(window.innerHeight - estimatedHeight - 16, rect.bottom + gap) : Math.max(16, rect.top - gap - estimatedHeight);
     setTooltipStyle({
       position: "fixed",
       left,
       top,
       width,
-      maxHeight: "min(14rem, calc(100vh - 2rem))",
-      transform: showBelow ? "none" : "translateY(-100%)"
+      maxHeight: "min(14rem, calc(100vh - 2rem))"
     });
   }
 
@@ -2946,6 +2961,21 @@ function clampAppZoom(value: number): number {
   return Math.min(appZoomMax, Math.max(appZoomMin, Math.round(value / appZoomStep) * appZoomStep));
 }
 
+function isDesktopRuntime(): boolean {
+  return Boolean(window.__TAURI__?.core?.invoke || window.__TAURI__?.tauri?.invoke || window.__AGENT_SMC_API_BASE_URL__ || window.location.protocol === "tauri:");
+}
+
+async function setDesktopWebviewZoom(scaleFactor: number): Promise<void> {
+  if (!isDesktopRuntime()) return;
+  const invoke = getTauriInvoke();
+  if (!invoke) return;
+  try {
+    await invoke("set_app_zoom", { scaleFactor });
+  } catch (error) {
+    console.warn("Failed to apply native desktop zoom.", error);
+  }
+}
+
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(await resolveApiUrl(url), withDesktopApiToken(options));
   const text = await response.text();
@@ -2974,12 +3004,39 @@ async function waitForDesktopApiBaseUrl(): Promise<string> {
   if (window.__AGENT_SMC_API_BASE_URL__) {
     return window.__AGENT_SMC_API_BASE_URL__.replace(/\/$/, "");
   }
-  if (window.location.protocol !== "tauri:") {
+  if (!isDesktopRuntime()) {
     return "";
+  }
+  const restoredBaseUrl = await readDesktopApiEndpointFromTauri();
+  if (restoredBaseUrl) {
+    return restoredBaseUrl;
   }
   const startedAt = Date.now();
   while (!window.__AGENT_SMC_API_BASE_URL__ && Date.now() - startedAt < 5000) {
     await new Promise((resolve) => window.setTimeout(resolve, 50));
+  }
+  return (window.__AGENT_SMC_API_BASE_URL__ || "").replace(/\/$/, "") || await readDesktopApiEndpointFromTauri();
+}
+
+function getTauriInvoke() {
+  return window.__TAURI__?.core?.invoke || window.__TAURI__?.tauri?.invoke;
+}
+
+async function readDesktopApiEndpointFromTauri(): Promise<string> {
+  const invoke = getTauriInvoke();
+  if (!invoke) {
+    return "";
+  }
+  try {
+    const endpoint = await invoke<DesktopApiEndpoint>("get_desktop_api_endpoint");
+    if (endpoint.apiBaseUrl) {
+      window.__AGENT_SMC_API_BASE_URL__ = endpoint.apiBaseUrl;
+    }
+    if (endpoint.apiToken) {
+      window.__AGENT_SMC_API_TOKEN__ = endpoint.apiToken;
+    }
+  } catch (error) {
+    console.warn("Failed to recover desktop API endpoint from Tauri.", error);
   }
   return (window.__AGENT_SMC_API_BASE_URL__ || "").replace(/\/$/, "");
 }
