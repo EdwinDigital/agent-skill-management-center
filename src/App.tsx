@@ -77,6 +77,13 @@ import { cn } from "@/lib/utils";
 type Language = "en" | "zh";
 type Theme = "light" | "dark";
 
+declare global {
+  interface Window {
+    __AGENT_SMC_API_BASE_URL__?: string;
+    __AGENT_SMC_API_TOKEN__?: string;
+  }
+}
+
 type SkillRoot = {
   id: string;
   label: string;
@@ -251,12 +258,16 @@ const graphMaxZoom = 1.6;
 const graphMaxAutoZoom = 1.2;
 const graphAutoZoomStep = 0.1;
 const graphAutoZoomRightPadding = 40;
+const appZoomMin = 80;
+const appZoomMax = 140;
+const appZoomStep = 10;
 const storageKeys = {
   language: "skill-viz-language",
   model: "skill-viz-model",
   sidebar: "skill-viz-sidebar-collapsed",
   skillDocPanel: "skill-viz-skill-doc-panel-collapsed",
-  theme: "skill-viz-theme"
+  theme: "skill-viz-theme",
+  appZoom: "skill-viz-app-zoom-percent"
 };
 
 const copy = {
@@ -341,6 +352,10 @@ const copy = {
     zoomIn: "Zoom in",
     zoomOut: "Zoom out",
     resetZoom: "Reset zoom",
+    zoomPercent: "Zoom",
+    appZoomIn: "Increase app zoom",
+    appZoomOut: "Decrease app zoom",
+    appZoomReset: "Reset app zoom",
     nodes: "nodes",
     edges: "edges",
     nodeDetail: "Node detail",
@@ -471,6 +486,10 @@ const copy = {
     zoomIn: "放大",
     zoomOut: "缩小",
     resetZoom: "重置缩放",
+    zoomPercent: "缩放",
+    appZoomIn: "放大应用界面",
+    appZoomOut: "缩小应用界面",
+    appZoomReset: "重置应用缩放",
     nodes: "个节点",
     edges: "条连线",
     nodeDetail: "节点详情",
@@ -525,6 +544,7 @@ const copy = {
 function App() {
   const [language, setLanguage] = useState<Language>(() => (localStorage.getItem(storageKeys.language) as Language) || "en");
   const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem(storageKeys.theme) as Theme) || "light");
+  const [appZoomPercent, setAppZoomPercent] = useState(() => normalizeAppZoom(localStorage.getItem(storageKeys.appZoom)));
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [model, setModel] = useState(() => localStorage.getItem(storageKeys.model) || "github-default");
   const [roots, setRoots] = useState<SkillRoot[]>([]);
@@ -574,6 +594,17 @@ function App() {
   const showSkillPagination = totalPages > 1;
   const visibleSkills = filteredSkills.slice((page - 1) * skillPageSize, page * skillPageSize);
 
+  function applyAppZoom(valueOrUpdater: number | ((current: number) => number), options: { notify?: boolean } = {}) {
+    setAppZoomPercent((current) => {
+      const rawNext = typeof valueOrUpdater === "function" ? valueOrUpdater(current) : valueOrUpdater;
+      const next = clampAppZoom(rawNext);
+      if (options.notify && next !== current) {
+        toast.message(`${text.zoomPercent}: ${next}%`);
+      }
+      return next;
+    });
+  }
+
   useEffect(() => {
     document.documentElement.lang = language === "zh" ? "zh-CN" : "en";
     localStorage.setItem(storageKeys.language, language);
@@ -583,6 +614,30 @@ function App() {
     document.documentElement.classList.toggle("dark", theme === "dark");
     localStorage.setItem(storageKeys.theme, theme);
   }, [theme]);
+
+  useEffect(() => {
+    document.documentElement.style.setProperty("--app-zoom", `${appZoomPercent}%`);
+    localStorage.setItem(storageKeys.appZoom, String(appZoomPercent));
+  }, [appZoomPercent]);
+
+  useEffect(() => {
+    function handleAppZoomShortcut(event: KeyboardEvent) {
+      if (!event.metaKey && !event.ctrlKey) return;
+      if (event.key === "+" || event.key === "=") {
+        event.preventDefault();
+        applyAppZoom((current) => current + appZoomStep, { notify: true });
+      } else if (event.key === "-") {
+        event.preventDefault();
+        applyAppZoom((current) => current - appZoomStep, { notify: true });
+      } else if (event.key === "0") {
+        event.preventDefault();
+        applyAppZoom(100, { notify: true });
+      }
+    }
+
+    window.addEventListener("keydown", handleAppZoomShortcut);
+    return () => window.removeEventListener("keydown", handleAppZoomShortcut);
+  }, [text.zoomPercent]);
 
   useEffect(() => {
     localStorage.setItem(storageKeys.model, model);
@@ -1694,6 +1749,21 @@ function App() {
               </Select>
               {loadingSettingsModels ? <p className="text-xs text-muted-foreground">{text.loadingModels}</p> : null}
             </div>
+            <div className="flex flex-col gap-2">
+              <label className="flex items-center gap-2 text-sm font-medium"><ZoomIn className="size-4" />{text.zoomPercent}</label>
+              <div className="settings-zoom-control">
+                <Button variant="outline" type="button" onClick={() => applyAppZoom((current) => current - appZoomStep)} disabled={appZoomPercent <= appZoomMin} aria-label={text.appZoomOut} title={text.appZoomOut}>
+                  <ZoomOut data-icon="inline-start" />
+                  {text.appZoomOut}
+                </Button>
+                <button type="button" className="settings-zoom-percent" onClick={() => applyAppZoom(100)} aria-label={text.appZoomReset} title={text.appZoomReset}>{appZoomPercent}%</button>
+                <Button variant="outline" type="button" onClick={() => applyAppZoom((current) => current + appZoomStep)} disabled={appZoomPercent >= appZoomMax} aria-label={text.appZoomIn} title={text.appZoomIn}>
+                  <ZoomIn data-icon="inline-start" />
+                  {text.appZoomIn}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">{text.appZoomReset}: Cmd/Ctrl + 0</p>
+            </div>
             <div className="flex items-center gap-3 rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
               {githubStatus?.authenticated ? (
                 <>
@@ -2691,8 +2761,17 @@ function DetailSkeleton() {
   );
 }
 
+function normalizeAppZoom(value: string | null): number {
+  return clampAppZoom(Number(value || 100));
+}
+
+function clampAppZoom(value: number): number {
+  if (!Number.isFinite(value)) return 100;
+  return Math.min(appZoomMax, Math.max(appZoomMin, Math.round(value / appZoomStep) * appZoomStep));
+}
+
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(url, options);
+  const response = await fetch(await resolveApiUrl(url), withDesktopApiToken(options));
   const text = await response.text();
   let payload: unknown = {};
   try {
@@ -2705,6 +2784,38 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
     throw new ApiRequestError(errorPayload.content || errorPayload.error || "Request failed.", errorPayload);
   }
   return payload as T;
+}
+
+async function resolveApiUrl(url: string): Promise<string> {
+  if (/^https?:\/\//i.test(url)) {
+    return url;
+  }
+  const desktopBaseUrl = await waitForDesktopApiBaseUrl();
+  return desktopBaseUrl && url.startsWith("/") ? `${desktopBaseUrl}${url}` : url;
+}
+
+async function waitForDesktopApiBaseUrl(): Promise<string> {
+  if (window.__AGENT_SMC_API_BASE_URL__) {
+    return window.__AGENT_SMC_API_BASE_URL__.replace(/\/$/, "");
+  }
+  if (window.location.protocol !== "tauri:") {
+    return "";
+  }
+  const startedAt = Date.now();
+  while (!window.__AGENT_SMC_API_BASE_URL__ && Date.now() - startedAt < 5000) {
+    await new Promise((resolve) => window.setTimeout(resolve, 50));
+  }
+  return (window.__AGENT_SMC_API_BASE_URL__ || "").replace(/\/$/, "");
+}
+
+function withDesktopApiToken(options?: RequestInit): RequestInit | undefined {
+  const token = window.__AGENT_SMC_API_TOKEN__;
+  if (!token) {
+    return options;
+  }
+  const headers = new Headers(options?.headers);
+  headers.set("X-Agent-SMC-Token", token);
+  return { ...options, headers };
 }
 
 class ApiRequestError extends Error {

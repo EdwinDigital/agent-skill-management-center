@@ -6,9 +6,12 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
+    "build:sidecar": "node scripts/build-sidecar-runtime.js",
     "start": "npm run build && node server.js",
     "stop": "node scripts/stop.js",
-    "check": "node --check server.js && tsc --noEmit"
+    "check": "node --check server.js && tsc --noEmit",
+    "desktop:dev": "npx @tauri-apps/cli@latest dev",
+    "desktop:build:mac": "npx @tauri-apps/cli@latest build --bundles dmg && node scripts/apply-dmg-icon.js"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.2.9",

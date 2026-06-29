@@ -54,6 +54,7 @@
 }
 
 :root {
+  --app-zoom: 100%;
   --background: #eef3fa;
   --foreground: #172033;
   --card: #ffffff;
@@ -159,6 +160,7 @@
   body {
     @apply bg-background text-foreground;
     letter-spacing: 0;
+    zoom: var(--app-zoom);
     }
   html {
     @apply font-sans;
@@ -538,6 +540,33 @@
     padding: 0 0.5rem;
     font-size: 0.8125rem;
     line-height: 1.25rem;
+  }
+
+  .settings-zoom-control {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(4rem, auto) minmax(0, 1fr);
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .settings-zoom-percent {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.25rem;
+    border: 1px solid color-mix(in srgb, var(--border) 86%, transparent);
+    border-radius: calc(var(--radius) - 2px);
+    background: color-mix(in srgb, var(--card) 84%, transparent);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-size: 0.875rem;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .settings-zoom-percent:hover {
+    background: var(--accent);
+    color: var(--accent-foreground);
   }
 
   .app-shell[data-sidebar-collapsed="true"] {

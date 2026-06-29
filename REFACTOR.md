@@ -25,6 +25,47 @@ Tauri 的基本模型是：
 
 因此，本项目不应该为了“桌面化”先引入更重的 Express 框架。真正重要的是把 `server.js` 中的业务逻辑、数据访问、系统能力和 HTTP adapter 解耦。
 
+## 当前完成状态（2026-06-29 校验）
+
+已完成和部分完成状态以当前仓库文件、测试和构建产物为准，不代表长期目标全部完成。
+
+- [x] Phase 0 现状稳定与安全网：已建立 Node 测试、TypeScript/Node 检查和 Tauri/Rust 检查链路；`server.js` 仍保留为行为参考。
+- [~] Phase 1 Express route 拆分：已完成 `server/config.js` 试点和启动配置集中化；尚未创建 `server/app.js`、`server/routes/*.routes.js` 和统一 middleware，因此 route 拆分整体未完成。
+- [~] Phase 2 Core service 拆分：已完成 `core/utils/hash.js`、`core/utils/paths.js` 等低风险工具拆分；`progress.service.js`、Skill service、Copilot service、模型分析和翻译服务仍未拆出。
+- [ ] Phase 3 Repository 拆分：SQLite repository 层尚未独立完成，SQL 仍主要保留在现有运行路径中。
+- [~] Phase 4 Runtime adapter 抽象：桌面 sidecar 已通过环境变量区分 host、随机端口、token 和数据库路径；完整 `runtime` context、filesystem/picker/model provider 抽象尚未完成。
+- [x] Phase 5 Tauri sidecar macOS 预览版：已添加 Tauri v2 scaffold、Node sidecar runtime、随机 localhost 端口、per-launch token、WebView API 注入、app data 目录数据库、应用退出清理 sidecar、macOS `.dmg` 发布产物和 DMG 图标处理。
+- [ ] Phase 5 Windows 预览版：尚未构建或验证 Windows 安装包/开发版。
+- [~] 前端桌面适配：已支持桌面注入 API base URL/token、设置页和快捷键百分比缩放；尚未引入正式 `src/lib/api/` client contract。
+- [ ] Phase 6 Tauri command 迁移：尚未开始，Node sidecar 仍承担 API、SQLite、文件扫描和 Copilot SDK 能力。
+- [ ] 正式发布签名/公证/自动更新：当前 DMG 是本地测试发布包，尚未完成 Developer ID 签名、公证、staple 或自动更新签名。
+
+最近一次校验已通过：`node --test tests/*.test.mjs`（19 个测试）、`npm run check`、`cargo check --manifest-path src-tauri/Cargo.toml`、`hdiutil verify release/Agent SMC_1.0.0_aarch64.dmg`。
+
+## 代码结构改进目标
+
+当前目录结构已经符合 Tauri 官方推荐的“双项目”形态：顶层 `src/` 是 React/Vite 前端项目，`src-tauri/` 是 Rust/Tauri 桌面项目。后续改进不应合并这两个 `src`，而应围绕源码、生成物、运行时资源和业务分层边界继续收敛。
+
+目标：
+
+- 保持 `src/` 作为唯一前端 UI 源码目录，避免把 Tauri/Rust 逻辑、Node API 逻辑或构建产物放入前端源码树。
+- 保持 `src-tauri/src/` 作为唯一 Rust/Tauri 桌面壳源码目录；`main.rs` 只保留桌面入口，Tauri 初始化、窗口生命周期、sidecar 管理和未来 commands 放在 `lib.rs` 或拆到 `src-tauri/src/commands/`、`src-tauri/src/services/`。
+- 补齐 `src-tauri/capabilities/`。当开始使用 Tauri commands、dialog、fs、shell 或插件权限时，把最小权限写入 capability 文件，不把权限隐式散落在代码中。
+- 将 `src-tauri/sidecar-node/` 明确为生成目录和打包资源目录，继续由 `scripts/build-sidecar-runtime.js` 生成并保持 Git 忽略；长期目标是缩小为 Copilot SDK provider，或被 Rust/Tauri commands 替代。
+- 新增 `src/lib/api/`，把前端 API contract、HTTP client、desktop-sidecar client 和未来 Tauri invoke client 统一起来，避免 UI 组件直接拼接 `/api`、读取全局注入变量或处理 token。
+- 继续把 `server.js` 变薄：`server/` 只作为 Express/HTTP adapter，业务逻辑迁入 `core/services/`，SQLite 访问迁入 `core/repositories/`，外部能力迁入 `core/providers/` 或 runtime adapters。
+- 保持 `setup/` 只管理 schema、seed 和迁移初始化；不要让业务查询继续扩散到 setup 脚本。
+- 保持 `public/dist/`、`data/`、`src-tauri/target/`、`src-tauri/gen/`、`src-tauri/sidecar-node/` 为构建/运行生成物，不进入源码管理。
+- `release/` 仅作为本地发布产物暂存和发布说明目录；正式发布后优先由 CI artifact 或 GitHub Releases 管理 DMG/MSI/NSIS 等二进制产物。
+
+结构改进优先级：
+
+1. 前端先落 `src/lib/api/`，降低 UI 与 HTTP/desktop 注入细节耦合。
+2. 后端先落 `server/app.js`、`server/routes/`、`server/middleware/`，把 Express 适配层从 `server.js` 拆出。
+3. Core 先落 `progress.service.js`、`language/localization`、`skill-root/skill-index/skill-reader`，让扫描和读取能力能被 Web、sidecar 和未来 Tauri commands 复用。
+4. Repository 再集中 SQLite 查询，避免迁移 Rust/Tauri 时重复理解 SQL 行为。
+5. Tauri commands 最后按价值迁移 filesystem、picker、SQLite、progress、error logs；Copilot SDK provider 暂时保留 Node sidecar，直到确认有稳定替代方案。
+
 ## 当前问题
 
 当前 `server.js` 集中了过多职责：
@@ -62,6 +103,35 @@ Tauri 的基本模型是：
 ## 推荐目标目录结构
 
 ```text
+src/
+  App.tsx
+  main.tsx
+  index.css
+  components/
+    ui/
+  lib/
+    api/
+      client.ts
+      contracts.ts
+      http-client.ts
+      desktop-sidecar-client.ts
+      tauri-client.ts
+    utils.ts
+  types.ts
+src-tauri/
+  Cargo.toml
+  Cargo.lock
+  build.rs
+  tauri.conf.json
+  icons/
+  capabilities/
+    default.json
+  src/
+    main.rs
+    lib.rs
+    commands/
+    services/
+  sidecar-node/          # generated, git-ignored
 server.js
 server/
   app.js
@@ -119,13 +189,18 @@ desktop/
     skills.contract.md
     analysis.contract.md
     settings.contract.md
+release/
+  README.md
 ```
 
 说明：
 
+- `src/` 是前端源码层，继续遵循 React/Vite 约定；`src/lib/api/` 是后续 API contract 和运行时 client 的收敛点。
+- `src-tauri/` 是 Tauri/Rust 项目层，继续遵循 Tauri 官方结构；`capabilities/` 在启用 Tauri commands/plugins 时承载最小权限配置。
 - `server/` 是当前 Web/HTTP 适配层。
 - `core/` 是可被 Express、Tauri sidecar、测试脚本和未来 Rust command 迁移参考复用的业务层。
 - `desktop/` 存放 Tauri 适配规划和 command contract，不立即引入 Tauri 依赖也能先定义边界。
+- `release/` 只保留发布说明或本地临时产物；正式二进制发布应由 CI artifact 或 release 系统承载。
 
 ## 分层设计
 
@@ -332,22 +407,22 @@ data/analysis.sqlite
 
 迁移策略：
 
-- Web/dev 模式保留 `data/analysis.sqlite`。
-- Desktop 模式使用 Tauri app data dir。
-- 启动时检测旧数据库并提供迁移/复制。
-- 不在 UI 中暴露绝对内部路径，除非用于调试。
+- [x] Web/dev 模式保留 `data/analysis.sqlite`。
+- [x] Desktop sidecar 模式使用 Tauri app data dir，并通过 `SKILL_ANALYSIS_DB` 指向 `analysis.sqlite`。
+- [ ] 启动时检测旧数据库并提供迁移/复制。
+- [~] 不在常规 UI 中暴露绝对内部路径；调试/日志场景仍需继续审计。
 
 ## 分阶段实施计划
 
-### Phase 0：现状稳定与安全网
+### Phase 0：现状稳定与安全网（已完成）
 
 目标：在拆分前建立基本安全网。
 
 任务：
 
-- 保持现有 API 行为不变。
-- 整理关键验证命令：`npm run check`、`npm run build`、浏览器核心流程。
-- 记录关键 API：
+- [x] 保持现有 API 行为不变。
+- [x] 整理关键验证命令：`npm run check`、`npm run build`、浏览器核心流程。
+- [x] 记录关键 API：
   - `/api/config`
   - `/api/skill-roots`
   - `/api/skills`
@@ -357,23 +432,24 @@ data/analysis.sqlite
   - `/api/skill-translation/cache`
   - `/api/skill-translation/generate`
   - `/api/error-logs`
-- 保留现有 `server.js` 作为行为参考。
+- [x] 保留现有 `server.js` 作为行为参考。
 
 验收：
 
-- 无功能改动。
-- `npm run check` 通过。
+- [x] 无功能改动。
+- [x] `npm run check` 通过。
 
-### Phase 1：Express route 拆分
+### Phase 1：Express route 拆分（部分完成）
 
 目标：把 HTTP route 从 `server.js` 中拆出。
 
 任务：
 
-- 创建 `server/app.js` 负责 Express app 创建、中间件、静态资源和 route 挂载。
-- 创建 `server/routes/*.routes.js`。
-- 创建 `server/middleware/error-handler.js`。
-- `server.js` 变成启动入口：加载 config、创建 app、listen。
+- [x] 创建 `server/config.js` 作为低风险启动配置拆分试点。
+- [ ] 创建 `server/app.js` 负责 Express app 创建、中间件、静态资源和 route 挂载。
+- [ ] 创建 `server/routes/*.routes.js`。
+- [ ] 创建 `server/middleware/error-handler.js`。
+- [ ] `server.js` 变成启动入口：加载 config、创建 app、listen。
 
 注意：
 
@@ -383,9 +459,9 @@ data/analysis.sqlite
 
 验收：
 
-- 所有 API 路径保持不变。
-- `npm run check` 通过。
-- `npm start` 可正常启动。
+- [x] 所有 API 路径保持不变。
+- [x] `npm run check` 通过。
+- [ ] `npm start` 可正常启动的最新轮次验证待补充。
 
 ### Phase 2：Core service 拆分
 
@@ -467,28 +543,31 @@ picker 抽象需要把“打开选择器”和“扫描目录”拆成两个步�
 - core service 可接收 runtime context。
 - 不依赖 process.cwd() 作为唯一数据根。
 
-### Phase 5：Tauri sidecar 预览版
+### Phase 5：Tauri sidecar 预览版（macOS 已完成，Windows 待验证）
 
 目标：先发布一个可用的桌面 preview。
 
 任务：
 
-- 添加 `src-tauri/`。
-- 让 Vite build 作为 Tauri frontendDist。
-- 将 Node server 打成 sidecar 或随应用启动。
-- Tauri 主进程负责：
-  - 启动 sidecar。
-  - 分配/读取 localhost 端口。
-  - 向前端注入 API base URL。
-  - 应用退出时关闭 sidecar。
-- Express server 只绑定 `127.0.0.1`。
-- 增加本地握手 token，前端请求带 token header。
+- [x] 添加 `src-tauri/`。
+- [x] 让 Vite build 作为 Tauri frontendDist。
+- [x] 将 Node server 打成 sidecar 并作为应用资源打包。
+- [x] Tauri 主进程负责：
+  - [x] 启动 sidecar。
+  - [x] 分配/读取 localhost 随机端口。
+  - [x] 向前端注入 API base URL。
+  - [x] 应用退出时关闭 sidecar。
+- [x] Express server 在 desktop sidecar 模式只绑定 `127.0.0.1`。
+- [x] 增加本地握手 token，前端请求带 token header。
+- [x] macOS `.dmg` 产物输出到 `release/Agent SMC_1.0.0_aarch64.dmg`。
+- [x] DMG 文件自身 Finder 图标已通过构建后脚本处理。
+- [x] 关闭主窗口时退出应用并清理 sidecar，避免安装镜像无法推出。
 
 验收：
 
-- macOS 可打开 `.app`。
-- Windows 可打开安装包或开发版。
-- Skill 扫描、逻辑图、缓存、翻译核心流程可用。
+- [x] macOS 可构建 `.app` 和 `.dmg`。
+- [ ] Windows 可打开安装包或开发版。
+- [~] Skill 扫描、逻辑图、缓存、翻译核心流程沿用 sidecar API；桌面实机完整流程仍需按测试用例逐项回归。
 
 ### Phase 6：Tauri command 迁移
 
@@ -613,12 +692,12 @@ CI 可分阶段：
 
 第一批小步改造：
 
-1. 新增 `server/config.js`，集中端口、路径、schema version、常量。
-2. 新增 `core/utils/language.js`，迁移 `normalizeLanguage`、`localize`、progress 文案。
-3. 新增 `core/utils/hash.js`，迁移 `hashText`。
-4. 新增 `core/utils/paths.js`，迁移 `expandHomePath`、`resolveProjectPath`、`normalizeScanPath`。
-5. 新增 `core/services/progress.service.js`，迁移 progress store。
-6. 新增 `server/routes/config.routes.js` 和 `server/routes/progress.routes.js` 作为最小 route 拆分试点。
+1. [x] 新增 `server/config.js`，集中端口、路径、schema version、常量。
+2. [ ] 新增 `core/utils/language.js`，迁移 `normalizeLanguage`、`localize`、progress 文案。
+3. [x] 新增 `core/utils/hash.js`，迁移 `hashText`。
+4. [x] 新增 `core/utils/paths.js`，迁移 `expandHomePath`、`resolveProjectPath`、`normalizeScanPath`。
+5. [ ] 新增 `core/services/progress.service.js`，迁移 progress store。
+6. [ ] 新增 `server/routes/config.routes.js` 和 `server/routes/progress.routes.js` 作为最小 route 拆分试点。
 
 这批任务风险低，能验证目录结构和 import 方式，不触碰 Copilot SDK 主流程。
 
