@@ -1,0 +1,63 @@
+name: Feature request
+description: Propose a focused Agent SMC improvement
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the workflow problem first. Focused requests with concrete users, constraints, and acceptance criteria are easier to evaluate.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or opportunity
+      description: Who needs this, and what cannot they do effectively today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe the smallest useful outcome rather than an implementation wishlist.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Existing workflow, workaround, or simpler option you evaluated.
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Primary area
+      options:
+        - Skill discovery and paths
+        - Rule analysis and graph
+        - AI evaluation and models
+        - Skill.md and translation
+        - Desktop application
+        - API and storage
+        - Documentation and contributor experience
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      placeholder: |
+        - Given ...
+        - When ...
+        - Then ...
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched existing issues and documentation.
+          required: true
+        - label: This request does not include secrets or private Skill content.
+          required: true

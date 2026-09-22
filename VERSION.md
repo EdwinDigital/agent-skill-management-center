@@ -2,23 +2,13 @@
 
 ## Current Version
 
-**Agent Skill Management Center Version 1.1.2**
+**Agent Skill Management Center Version 1.0.0**
 
-Package version: `1.1.2`
+Package version: `1.0.0`
 
-## Version 1.1.2 Scope
+## Version 1.0.0 Scope
 
-Version 1.1.2 is a desktop stability patch. It includes:
-
-- Recovery of the Tauri sidecar API endpoint and token after WebView reloads, preventing desktop API calls from waiting for a missing injected global.
-- Faster desktop Skill detail loading after Vite/HMR reloads by avoiding repeated API base URL wait time.
-- Restored live Copilot model list loading in the desktop shell after sidecar endpoint recovery.
-- Tauri WebView visual crispness fixes that remove ordinary UI CSS transforms from dialogs, selects, buttons, and sidebar controls.
-- Left/right collapsed rail style parity and corrected left sidebar expand/collapse hit areas.
-
-## Version 1.0 Scope
-
-Version 1.0 defines the first stable local-first release of Agent Skill Management Center. It includes:
+Version 1.0.0 defines the first stable local-first release of Agent Skill Management Center. It includes:
 
 - Local Skill root discovery, custom root management, search, selection, and pagination.
 - Immediate rule-based Skill analysis with summary, triggers, tools, run methods, file stats, graph nodes, and evidence.
@@ -28,6 +18,9 @@ Version 1.0 defines the first stable local-first release of Agent Skill Manageme
 - Session-cached live Copilot model listing in Settings.
 - Three-area workbench UI: `SidebarConsole`, `DetailSurface`, and `DocPanel`.
 - Standalone reusable static workbench template under `web_template/`.
+- Tauri desktop packages for macOS ARM64, Windows x64, and Windows ARM64.
+- Embedded Node runtime, desktop Device OAuth, and token-protected localhost sidecar.
+- GitHub Actions CI and atomic cross-platform Release automation.
 
 ## Version 1.0 Stability Rules
 
@@ -50,8 +43,11 @@ The following behavior is considered part of the Version 1.0 contract:
 Before declaring a release ready, run:
 
 ```bash
+npm test
 npm run check
 npm run build
+cargo test --manifest-path src-tauri/Cargo.toml
+cargo check --manifest-path src-tauri/Cargo.toml
 ```
 
 For UI or AI workflow changes, additionally verify the app in the browser and test a real Skill through AI evaluation and cache reads.

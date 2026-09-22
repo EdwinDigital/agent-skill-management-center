@@ -1,7 +1,16 @@
 {
   "name": "skill-logic-visualizer",
   "version": "1.0.0",
-  "description": "A local web app for visualizing Skill execution logic and tool usage.",
+  "description": "A local-first workbench for exploring, auditing, translating, and AI-evaluating Agent Skills.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/EdwinDigital/agent-skill-management-center.git"
+  },
+  "bugs": {
+    "url": "https://github.com/EdwinDigital/agent-skill-management-center/issues"
+  },
+  "homepage": "https://github.com/EdwinDigital/agent-skill-management-center#readme",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
