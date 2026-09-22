@@ -1,66 +1,45 @@
 import express from "express";
 import { execFile } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import fsSync from "node:fs";
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
-import { hashText } from "./core/utils/hash.js";
-import { expandHomePath, normalizeScanPath } from "./core/utils/paths.js";
-import {
-  createServerConfig
-} from "./server/config.js";
-import { canWriteJsonResponse, sendJsonIfWritable } from "./server/http-response.js";
 import { promisify } from "node:util";
 import { initializeDatabase, seedCurrentDefaultSkillRoot } from "./setup/database.js";
 import { supportedAgentSkillDirectories } from "./setup/default-skill-directories.js";
 
 const app = express();
 const execFileAsync = promisify(execFile);
-const {
-  port,
-  defaultSkillRoot,
-  defaultSkillRootDisplayPath,
-  databasePath,
-  analysisSchemaVersion,
-  fallbackModels,
-  progressTtlMs,
-  maxFileBytes,
-  skillManifestFileName,
-  skillIndexMaxDepth,
-  inspectedSkillRootCacheTtlMs,
-  descriptionCandidates
-} = createServerConfig();
-const host = process.env.HOST || undefined;
-const sidecarToken = process.env.AGENT_SMC_TOKEN || "";
+const port = Number(process.env.PORT || 4173);
+const defaultSkillRoot = process.env.SKILL_ROOT || path.join(os.homedir(), ".agents", "skills");
+const defaultSkillRootDisplayPath = process.env.SKILL_ROOT ? defaultSkillRoot : "~/.agents/skills/";
+const defaultDatabasePath = "data/analysis.sqlite";
+const databasePath = resolveProjectPath(process.env.SKILL_ANALYSIS_DB || defaultDatabasePath);
+const analysisSchemaVersion = "logic-map-value-insight-sections-v3";
+const fallbackModels = [
+  { id: "github-default", name: "GitHub default", source: "fallback" }
+];
 const progressStore = new Map();
+const progressTtlMs = 10 * 60 * 1000;
+const maxFileBytes = 220_000;
+const skillManifestFileName = "SKILL.md";
+const skillIndexMaxDepth = 10;
+const inspectedSkillRootCacheTtlMs = 5 * 60 * 1000;
 const inspectedSkillRootCache = new Map();
-const githubDeviceAuthSessions = new Map();
+const descriptionCandidates = [
+  "SKILL.md",
+  "skill.md",
+  "README.md",
+  "readme.md",
+  "DESCRIPTION.md",
+  "description.md",
+  "manifest.json",
+  "skill.json"
+];
 const database = initializeDatabase({ databasePath, defaultSkillRoot, defaultSkillRootDisplayPath });
-const githubOAuthClientId = process.env.GITHUB_OAUTH_CLIENT_ID || "Iv1.b507a08c87ecfe98";
-const githubOAuthScopes = process.env.GITHUB_OAUTH_SCOPES || "read:user user:email copilot";
 
 app.use(express.json({ limit: "2mb" }));
-app.use((request, response, next) => {
-  const origin = request.headers.origin;
-  if (origin && (/^tauri:\/\/localhost$/i.test(origin) || /^http:\/\/(localhost|127\.0\.0\.1):\d+$/i.test(origin))) {
-    response.setHeader("Access-Control-Allow-Origin", origin);
-    response.setHeader("Vary", "Origin");
-  }
-  response.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Agent-SMC-Token");
-  response.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
-  if (request.method === "OPTIONS") {
-    response.status(204).end();
-    return;
-  }
-  next();
-});
-app.use((request, response, next) => {
-  if (sidecarToken && request.path.startsWith("/api/") && request.headers["x-agent-smc-token"] !== sidecarToken) {
-    response.status(401).json({ error: "Unauthorized desktop sidecar request." });
-    return;
-  }
-  next();
-});
 app.use((error, request, response, next) => {
   if (error?.type === "entity.too.large") {
     sendJsonError(response, request, 413, error, {
@@ -178,27 +157,8 @@ app.post("/api/auth/github/login", async (_request, response) => {
   });
 });
 
-app.post("/api/auth/github/device/start", async (_request, response) => {
-  try {
-    const auth = await startGitHubDeviceFlow();
-    await openExternalUrl(auth.verification_uri);
-    response.json(auth);
-  } catch (error) {
-    sendJsonError(response, _request, 500, error, { scope: "github-oauth-start" });
-  }
-});
-
-app.post("/api/auth/github/device/poll", async (request, response) => {
-  try {
-    response.json(await pollGitHubDeviceFlow(String(request.body?.requestId || "")));
-  } catch (error) {
-    sendJsonError(response, request, 400, error, { scope: "github-oauth-poll" });
-  }
-});
-
 app.post("/api/auth/github/logout", async (_request, response) => {
   try {
-    clearStoredGitHubOAuthToken();
     const status = await getGitHubAuthStatus({ checkCli: true });
     if (status.authenticated) {
       const args = ["auth", "logout", "--hostname", status.hostname || "github.com"];
@@ -227,7 +187,7 @@ app.get("/api/models", async (request, response) => {
     try {
       await withTimeout(client.start(), 10_000, "Timed out while starting Copilot SDK runtime.");
       const models = await withTimeout(client.listModels(), 10_000, "Timed out while listing Copilot models.");
-      sendJsonIfWritable(response, request, {
+      response.json({
         source: "copilot-sdk",
         models: normalizeModels(models)
       });
@@ -235,9 +195,6 @@ app.get("/api/models", async (request, response) => {
       await stopCopilotClient(client);
     }
   } catch (error) {
-    if (!canWriteJsonResponse(response, request)) {
-      return;
-    }
     logServerError(error, { request, status: 200, scope: "models-fallback" });
     const authGuide = error?.authGuide || (isCopilotSdkAuthError(error) ? buildGitHubAuthGuide({ authenticated: false, needsCopilotScope: false, cliInstalled: true, tokenAvailable: false }) : null);
     const authPayload = authGuide ? {
@@ -245,7 +202,7 @@ app.get("/api/models", async (request, response) => {
       authCommand: authGuide.command || error.authStatus?.command || "gh auth login --web && gh auth refresh --scopes copilot",
       authHelp: authGuide.message || error.authStatus?.message || "Sign in with GitHub CLI and refresh the Copilot OAuth scope."
     } : {};
-    sendJsonIfWritable(response, request, {
+    response.json({
       source: "fallback",
       ...authPayload,
       error: error.message,
@@ -450,7 +407,8 @@ function resolveRequestedRoot(root) {
     return defaultSkillRoot;
   }
 
-  return path.resolve(expandHomePath(root));
+  const expanded = root.startsWith("~/") ? path.join(os.homedir(), root.slice(2)) : root;
+  return path.resolve(expanded);
 }
 
 function normalizeLanguage(language) {
@@ -861,6 +819,20 @@ function upsertScannedSkillRoot(db, { sourceType, agentSlug, label, value, remov
   return !before;
 }
 
+function normalizeScanPath(value, sourceType) {
+  return sourceType === "browser" ? String(value) : path.resolve(expandHomePath(value));
+}
+
+function expandHomePath(value) {
+  const text = String(value || "");
+  return text.startsWith("~/") ? path.join(os.homedir(), text.slice(2)) : text;
+}
+
+function resolveProjectPath(value) {
+  const expanded = expandHomePath(value);
+  return path.isAbsolute(expanded) ? expanded : path.resolve(process.cwd(), expanded);
+}
+
 function directoryExists(value) {
   try {
     return fsSync.statSync(value).isDirectory();
@@ -1076,6 +1048,10 @@ function buildAnalysisCacheMetadata(skill) {
 function normalizeSkillStoragePath(skillPath) {
   const value = String(skillPath || "").trim();
   return value ? path.normalize(value) : "";
+}
+
+function hashText(value) {
+  return createHash("sha256").update(String(value)).digest("hex");
 }
 
 function getCachedModelAnalysis(skill, model, language) {
@@ -1659,50 +1635,7 @@ function localize(text, language = "en") {
 }
 
 async function getGitHubAuthStatus({ checkCli = false } = {}) {
-  const storedOAuth = getStoredGitHubOAuthToken();
   const hasGitHubToken = Boolean(getConfiguredGitHubToken());
-  if (storedOAuth && !checkCli) {
-    return {
-      cliInstalled: true,
-      tokenAvailable: true,
-      authenticated: true,
-      ready: true,
-      login: storedOAuth.login || "GitHub",
-      name: "",
-      avatarUrl: storedOAuth.avatar_url || "",
-      scopes: splitGitHubScopes(storedOAuth.scope),
-      needsCopilotScope: !splitGitHubScopes(storedOAuth.scope).includes("copilot"),
-      authRequired: false,
-      message: "GitHub OAuth token is stored locally.",
-      command: ""
-    };
-  }
-
-  if (storedOAuth && checkCli) {
-    try {
-      const user = await fetchGitHubUser(storedOAuth.access_token);
-      if ((user.login || user.avatarUrl) && (user.login !== storedOAuth.login || user.avatarUrl !== storedOAuth.avatar_url)) {
-        updateStoredGitHubOAuthIdentity({ login: user.login, avatarUrl: user.avatarUrl });
-      }
-      return {
-        cliInstalled: true,
-        tokenAvailable: true,
-        authenticated: true,
-        ready: true,
-        login: user.login || storedOAuth.login || "GitHub",
-        name: "",
-        avatarUrl: user.avatarUrl || storedOAuth.avatar_url || "",
-        scopes: splitGitHubScopes(storedOAuth.scope),
-        needsCopilotScope: !splitGitHubScopes(storedOAuth.scope).includes("copilot"),
-        authRequired: false,
-        message: "GitHub OAuth token is stored locally.",
-        command: ""
-      };
-    } catch (error) {
-      clearStoredGitHubOAuthToken();
-    }
-  }
-
   if (!checkCli) {
     return {
       cliInstalled: true,
@@ -1795,164 +1728,6 @@ function buildGitHubAuthGuide(status = {}) {
   };
 }
 
-async function startGitHubDeviceFlow() {
-  const payload = await postGitHubOAuthForm("https://github.com/login/device/code", {
-    client_id: githubOAuthClientId,
-    scope: githubOAuthScopes
-  });
-  if (!payload.device_code || !payload.user_code || !payload.verification_uri) {
-    throw new Error(payload.error_description || payload.error || "GitHub did not return a device authorization code.");
-  }
-
-  const requestId = randomUUID();
-  githubDeviceAuthSessions.set(requestId, {
-    deviceCode: payload.device_code,
-    interval: Number(payload.interval || 5),
-    expiresAt: Date.now() + Number(payload.expires_in || 900) * 1000
-  });
-
-  return {
-    requestId,
-    user_code: payload.user_code,
-    verification_uri: payload.verification_uri,
-    expires_in: Number(payload.expires_in || 900),
-    interval: Number(payload.interval || 5)
-  };
-}
-
-async function pollGitHubDeviceFlow(requestId) {
-  const session = githubDeviceAuthSessions.get(requestId);
-  if (!session) {
-    throw new Error("GitHub OAuth session was not found. Start login again.");
-  }
-  if (Date.now() > session.expiresAt) {
-    githubDeviceAuthSessions.delete(requestId);
-    return { status: "expired", message: "GitHub OAuth code expired. Start login again." };
-  }
-
-  const payload = await postGitHubOAuthForm("https://github.com/login/oauth/access_token", {
-    client_id: githubOAuthClientId,
-    device_code: session.deviceCode,
-    grant_type: "urn:ietf:params:oauth:grant-type:device_code"
-  });
-
-  if (payload.access_token) {
-    const user = await fetchGitHubUser(payload.access_token);
-    storeGitHubOAuthToken({
-      accessToken: payload.access_token,
-      tokenType: payload.token_type || "bearer",
-      scope: payload.scope || githubOAuthScopes,
-      login: user.login,
-      avatarUrl: user.avatarUrl
-    });
-    githubDeviceAuthSessions.delete(requestId);
-    return { status: "authorized", authStatus: await getGitHubAuthStatus({ checkCli: false }) };
-  }
-
-  if (payload.error === "authorization_pending") {
-    return { status: "pending", interval: session.interval };
-  }
-  if (payload.error === "slow_down") {
-    session.interval = Number(payload.interval || session.interval + 5);
-    return { status: "pending", interval: session.interval };
-  }
-  if (payload.error === "expired_token") {
-    githubDeviceAuthSessions.delete(requestId);
-    return { status: "expired", message: "GitHub OAuth code expired. Start login again." };
-  }
-  if (payload.error === "access_denied") {
-    githubDeviceAuthSessions.delete(requestId);
-    return { status: "denied", message: "GitHub OAuth authorization was denied." };
-  }
-
-  throw new Error(payload.error_description || payload.error || "GitHub OAuth authorization failed.");
-}
-
-async function postGitHubOAuthForm(url, fields) {
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/x-www-form-urlencoded"
-    },
-    body: new URLSearchParams(fields)
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(payload.error_description || payload.error || `GitHub OAuth request failed with ${response.status}.`);
-  }
-  return payload;
-}
-
-async function fetchGitHubUser(accessToken) {
-  const response = await fetch("https://api.github.com/user", {
-    headers: {
-      Accept: "application/vnd.github+json",
-      Authorization: `Bearer ${accessToken}`,
-      "User-Agent": "Agent-SMC"
-    }
-  });
-  if (!response.ok) {
-    throw new Error(`GitHub user validation failed with ${response.status}.`);
-  }
-  const user = await response.json();
-  return {
-    login: user.login || "",
-    avatarUrl: user.avatar_url || ""
-  };
-}
-
-async function openExternalUrl(url) {
-  try {
-    if (process.platform === "darwin") {
-      await execFileAsync("open", [url], { timeout: 5000 });
-      return;
-    }
-    if (process.platform === "win32") {
-      await execFileAsync("cmd", ["/c", "start", "", url], { timeout: 5000 });
-      return;
-    }
-    await execFileAsync("xdg-open", [url], { timeout: 5000 });
-  } catch (error) {
-    logServerError(error, { scope: "github-oauth-open-url", level: "warn", silent: true });
-  }
-}
-
-function storeGitHubOAuthToken({ accessToken, tokenType, scope, login, avatarUrl }) {
-  const now = new Date().toISOString();
-  database.prepare(`
-    INSERT INTO github_oauth_tokens (id, access_token, token_type, scope, login, avatar_url, created_at, updated_at)
-    VALUES ('default', ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET
-      access_token = excluded.access_token,
-      token_type = excluded.token_type,
-      scope = excluded.scope,
-      login = excluded.login,
-      avatar_url = excluded.avatar_url,
-      updated_at = excluded.updated_at
-  `).run(accessToken, tokenType, scope, login, avatarUrl, now, now);
-}
-
-function updateStoredGitHubOAuthIdentity({ login, avatarUrl }) {
-  database.prepare(`
-    UPDATE github_oauth_tokens
-    SET login = ?, avatar_url = ?, updated_at = ?
-    WHERE id = 'default'
-  `).run(login, avatarUrl, new Date().toISOString());
-}
-
-function getStoredGitHubOAuthToken() {
-  return database.prepare("SELECT access_token, token_type, scope, login, avatar_url FROM github_oauth_tokens WHERE id = 'default'").get();
-}
-
-function clearStoredGitHubOAuthToken() {
-  database.prepare("DELETE FROM github_oauth_tokens WHERE id = 'default'").run();
-}
-
-function splitGitHubScopes(scope) {
-  return String(scope || "").split(/[\s,]+/).map((item) => item.trim()).filter(Boolean);
-}
-
 async function createCopilotSdkClient() {
   const { CopilotClient } = await import("@github/copilot-sdk");
   const gitHubToken = getConfiguredGitHubToken();
@@ -1966,7 +1741,7 @@ async function createCopilotSdkClient() {
 }
 
 function getConfiguredGitHubToken() {
-  return String(process.env.COPILOT_GITHUB_TOKEN || process.env.GH_TOKEN || process.env.GITHUB_TOKEN || getStoredGitHubOAuthToken()?.access_token || "").trim();
+  return String(process.env.COPILOT_GITHUB_TOKEN || process.env.GH_TOKEN || process.env.GITHUB_TOKEN || "").trim();
 }
 
 async function disconnectCopilotSession(session) {
@@ -2685,15 +2460,7 @@ process.on("uncaughtException", (error) => {
   setTimeout(() => process.exit(1), 100).unref();
 });
 
-const server = host ? app.listen(port, host, onServerListening) : app.listen(port, onServerListening);
-
-function onServerListening() {
-  const address = server.address();
-  const actualPort = typeof address === "object" && address ? address.port : port;
-  const actualHost = host || "localhost";
-  if (process.env.AGENT_SMC_SIDECAR === "1") {
-    console.log(`AGENT_SMC_READY ${JSON.stringify({ host: actualHost, port: actualPort })}`);
-  }
-  console.log(`AI Agent Skills Console running at http://${actualHost}:${actualPort}`);
+app.listen(port, () => {
+  console.log(`AI Agent Skills Console running at http://localhost:${port}`);
   console.log(`Default skill root: ${defaultSkillRoot}`);
-}
+});

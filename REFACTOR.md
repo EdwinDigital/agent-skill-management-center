@@ -1,18 +1,8 @@
-# Refactor Plan for Agent SMC project
-
-## 文档结构
-
-本文是 Agent SMC 应用 Tauri 桌面化与长期重构的路线图，不是逐次变更日志。维护时按以下边界更新，避免同一事实在多处漂移：
-
-- “当前状态快照”只记录已经完成、部分完成和明确未完成的事实。
-- “目标架构与结构边界”只记录长期形态和目录职责。
-- “分层设计”和“Tauri 适配路线”只记录设计原则，不同步具体完成状态。
-- “分阶段实施计划”是唯一的任务清单来源；“推荐近期落地任务”只保留下一批动作。
-- “验证与发布”集中记录验证策略、发布门槛和流水线，其他章节只引用这里的规则。
+# Refactor Plan for Tauri Desktop Readiness
 
 ## 目标
 
-本项目当前是本地优先的 Agent Skill Management Center（SMC）：React/Vite 前端、Express/Node API、`node:sqlite` 本地数据库，并通过 GitHub Copilot SDK 做模型分析与翻译。未来目标是将它改造成可以用 Tauri 封装和发布的桌面应用，支持 macOS 和 Windows。
+本项目当前是本地优先的 AI Agent Skills Console：React/Vite 前端、Express/Node API、`node:sqlite` 本地数据库，并通过 GitHub Copilot SDK 做模型分析与翻译。未来目标是将它改造成可以用 Tauri 封装和发布的桌面应用，支持 macOS 和 Windows。
 
 最终形态应该满足：
 
@@ -34,140 +24,6 @@ Tauri 的基本模型是：
 - 可以使用 sidecar 运行额外可执行文件，但 sidecar 更适合作为迁移阶段或不可迁移能力的兼容层。
 
 因此，本项目不应该为了“桌面化”先引入更重的 Express 框架。真正重要的是把 `server.js` 中的业务逻辑、数据访问、系统能力和 HTTP adapter 解耦。
-
-## 当前状态快照（2026-06-29 校验）
-
-本节只描述当前事实，不替代后文的目标结构和实施计划。已完成和部分完成状态以当前仓库文件、测试和构建产物为准，不代表长期目标全部完成。
-
-- [x] Phase 0 现状稳定与安全网：已建立 Node 测试、TypeScript/Node 检查和 Tauri/Rust 检查链路；`server.js` 仍保留为行为参考。当前测试集覆盖桌面 sidecar、Tauri scaffold、缩放/侧栏、GitHub OAuth、路径/哈希/config 和 HTTP response 防护。
-- [~] Phase 1 Express route 拆分：已完成 `server/config.js` 试点和启动配置集中化；尚未创建 `server/app.js`、`server/routes/*.routes.js` 和统一 middleware，因此 route 拆分整体未完成。
-- [~] Phase 2 Core service 拆分：已完成 `core/utils/hash.js`、`core/utils/paths.js` 等低风险工具拆分；已新增 `server/http-response.js` 处理已关闭响应流的 JSON 写入防护；`progress.service.js`、Skill service、Copilot service、模型分析和翻译服务仍未拆出。
-- [ ] Phase 3 Repository 拆分：SQLite repository 层尚未独立完成，SQL 仍主要保留在现有运行路径中。
-- [~] Phase 4 Runtime adapter 抽象：桌面 sidecar 已通过环境变量区分 host、随机端口、token 和数据库路径；完整 `runtime` context、filesystem/picker/model provider 抽象尚未完成。
-- [x] Phase 5 Tauri sidecar macOS 预览版：已添加 Tauri v2 scaffold、Node sidecar runtime、随机 localhost 端口、per-launch token、WebView API 注入与 reload 后 endpoint/token 恢复、app data 目录数据库、应用退出清理 sidecar、macOS `.dmg` 发布产物、DMG 图标处理和 release 目录自动保留最新两个 DMG。
-- [ ] Phase 5 Windows 预览版：尚未构建或验证 Windows 安装包/开发版。
-- [~] 前端桌面适配：已支持桌面注入 API base URL/token、WebView reload 后通过 Tauri command 恢复 sidecar endpoint、设置页和快捷键百分比缩放；桌面端使用 native WebView zoom，浏览器调试页保留 CSS `zoom` fallback；尚未引入正式 `src/lib/api/` client contract。
-- [ ] Phase 6 Tauri command 迁移：尚未开始，Node sidecar 仍承担 API、SQLite、文件扫描和 Copilot SDK 能力。
-- [~] 桌面发布元数据：bundle identifier 已从 `com.local.agent-smc` 改为 `com.edwindigital.agent-smc`；当前 DMG 仍是本地测试发布包。
-- [ ] 正式发布签名/公证/自动更新：尚未完成 Developer ID 签名、公证、staple 或自动更新签名。
-
-最近一次完整发布校验已通过：`node --test tests/*.test.mjs`、`npm run check`、`npm run desktop:build:mac`，并生成 `release/Agent SMC_1.1.2_aarch64.dmg`。之后又完成了 bundle identifier 更新和重新打包；后续验证策略统一见“验证与发布”。
-
-## 架构成熟度、工程量与价值评估
-
-本项目已经超过“个人脚本”或“轻量 Web 原型”的阶段，更接近一个本地优先的开发者桌面产品 beta。它已经形成了 Web 控制台、Node/Express API、本地 SQLite 缓存、GitHub Copilot SDK 能力、Tauri sidecar 桌面壳和基础回归测试的完整闭环。当前主要短板不是功能方向，而是工程边界和发布级成熟度：核心逻辑仍集中在 `server.js` 和 `src/App.tsx`，长期维护会越来越依赖重构拆分、行为测试和安全加固。
-
-### 总体成熟度判断
-
-按行业开发经验，当前状态可评估为：
-
-| 维度 | 评分 | 判断 |
-|---|---:|---|
-| 产品方向 | 4.0 / 5 | 场景清晰，面向 agent skill 维护者，功能闭环真实。 |
-| 前端架构 | 2.8 / 5 | UI 完整，但主状态、API 调用和桌面适配仍集中在 `src/App.tsx`。 |
-| 后端架构 | 2.5 / 5 | API 和业务能力强，但 `server.js` 仍是 monolith，route/service/repository/provider 边界未完全拆开。 |
-| 数据模型 | 3.3 / 5 | SQLite schema 较清晰，已有目录、缓存、错误日志和 OAuth token 表；迁移机制仍偏轻量。 |
-| AI 能力设计 | 3.6 / 5 | AI 评估拆成评分、洞察/触发 Prompt、图谱生成并做缓存，设计方向成熟；provider/prompt 还未服务化。 |
-| 桌面架构 | 3.0 / 5 | Tauri sidecar 路线务实，已覆盖随机端口、token、app data DB 和 reload 恢复；Windows、签名、公证和自动更新尚未完成。 |
-| 安全成熟度 | 2.6 / 5 | sidecar token 和 localhost 限制是基础防护；OAuth token 存储、CSP、路径授权和日志脱敏还需产品级加固。 |
-| 测试成熟度 | 2.7 / 5 | 已有关键回归测试，但较多是源码结构断言；业务行为、API 集成和端到端覆盖不足。 |
-| 发布成熟度 | 2.5 / 5 | macOS DMG 本地预览已可构建；正式签名、公证、staple、自动更新和 Windows 发布仍未完成。 |
-| 文档成熟度 | 3.8 / 5 | README、VERSION、release 说明和本文档较完整，路线判断清楚。 |
-
-综合成熟度约为 **2.8-3.1 / 5**。它已经是功能型 beta，但还不是架构型稳定产品。作为个人或小团队内部工具已经有较高使用价值；作为正式跨平台桌面产品，还需要一轮系统性工程化。
-
-### 当前已投入工程量估算
-
-以熟悉 Node.js、React、SQLite、Copilot SDK 和 Tauri 的高级工程师为基准，从零做到当前状态，合理估算如下：
-
-| 模块 | 估算工作量 |
-|---|---:|
-| React 工作台 UI、状态、图谱、文档栏、设置 | 3-5 人周 |
-| Express API、Skill 扫描、规则分析、缓存 | 3-5 人周 |
-| Copilot SDK 集成、模型列表、AI 评估、翻译和错误处理 | 2-4 人周 |
-| SQLite schema、缓存、目录索引、错误日志 | 1-2 人周 |
-| GitHub CLI / OAuth device flow 登录链路 | 1-2 人周 |
-| Tauri sidecar、DMG、本地 token、endpoint 恢复 | 2-3 人周 |
-| UI 缩放和 Tauri WebView 视觉/布局修复 | 1-2 人周 |
-| 文档、版本说明和回归测试 | 1-2 人周 |
-
-当前已经沉淀的工程量约为 **14-25 人周**。如果由单人边探索边实现，实际日历时间可能是 2-4 个月；如果需求明确、经验充分，压缩到 6-10 周也合理。
-
-### 剩余工程量估算
-
-如果目标是稳定的内部桌面工具，后续主要工程量约为 **8-16 人周**：
-
-| 工作 | 估算工作量 |
-|---|---:|
-| 拆 `server.js` 到 routes/services/repositories/providers | 2-4 人周 |
-| 拆 `src/App.tsx` 的 API client、状态和组件边界 | 2-4 人周 |
-| 增加核心业务测试：Skill 扫描、缓存命中、AI fallback、错误日志 | 1.5-3 人周 |
-| 桌面回归：启动、退出、reload、app data、DMG 安装路径 | 1-2 人周 |
-| 安全加固：token 日志脱敏、OAuth token 存储策略、CSP、路径授权 | 1-2 人周 |
-| 文档和维护手册 | 0.5-1 人周 |
-
-如果目标是正式跨平台可发布产品，后续工程量约为 **17-35 人周**：
-
-| 工作 | 估算工作量 |
-|---|---:|
-| 完成内部稳定版工程化 | 8-16 人周 |
-| Windows Tauri 打包、WebView2、路径和 sidecar 策略 | 2-4 人周 |
-| macOS Developer ID 签名、公证、staple、干净机器验证 | 1-3 人周 |
-| 自动更新设计与签名 | 2-4 人周 |
-| 安装包、崩溃/日志收集、版本迁移 | 2-4 人周 |
-| 真实 E2E 测试和发布验收矩阵 | 2-4 人周 |
-
-### 工程价值评估
-
-项目价值主要来自把 Agent Skill 的隐性知识显性化：它能降低查找、阅读、理解、审计和翻译 Skill 的成本，并帮助维护者判断哪些 Skill 值得继续投入 AI 评估、重写、合并或删除。
-
-内部工具价值较高，约为 **4 / 5**。如果一个维护者每周需要查看或调整 20-50 个 Skill，每个 Skill 节省 5-15 分钟，则每周可节省约 2-12 小时。对 agent-heavy 团队，这个价值是真实且可复用的。
-
-开源工具价值约为 **3.5 / 5**。它足够垂直，能服务 agent builder 和 skill maintainer，但需要更稳的安装、配置和跨平台体验。
-
-独立商业产品价值暂评为 **2.5-3 / 5**。如果要提高商业化空间，需要补上团队协作、批量审计、质量评分标准、报告导出、CI 集成、Skill marketplace 管理或组织级治理能力。
-
-### 主要风险
-
-1. 单文件复杂度过高。`server.js` 和 `src/App.tsx` 都已经进入高维护风险区，继续堆功能会降低迭代速度并增加回归概率。
-2. 测试更多是结构回归，不足以证明业务行为正确。后续需要 API 行为测试、数据库迁移测试和桌面端端到端验证。
-3. Tauri sidecar 仍是迁移阶段方案。Node runtime、sidecar 签名、公证、Windows 策略和长期安全模型仍需补齐。
-4. 安全边界需要提升。本地文件读取、OAuth token、Copilot SDK、错误日志和 sidecar HTTP 都是敏感面，正式分发前需要系统性 threat model。
-5. 数据迁移机制偏轻。随着用户数据变重要，需要版本化 migration、备份/恢复和旧数据库迁移提示。
-
-### 后续建议
-
-优先不要继续堆新功能，而是先把现有能力工程化：
-
-1. 先落 `src/lib/api/`，把前端 UI 与 HTTP、desktop sidecar 注入和未来 Tauri invoke 解耦。
-2. 再拆 `progress.service.js`、`core/utils/language.js`、`server/routes/config.routes.js` 和 `server/routes/progress.routes.js`，用低风险切片验证分层方式。
-3. 然后拆 Skill root / Skill index / Skill reader 相关 service 和 repository，让扫描、读取、索引逻辑从 HTTP route 中解放出来。
-4. 同步补行为测试，优先覆盖 `/api/skills`、`/api/skills/:name`、`/api/logic-map/cache`、`/api/skill-translation/cache`、数据库初始化和 sidecar token 认证。
-5. 等核心边界稳定后，再推进 Tauri native dialog、SQLite/error logs/progress commands、Windows 打包和正式发布链路。
-
-## 目标架构与结构边界
-
-当前目录结构已经符合 Tauri 官方推荐的“双项目”形态：顶层 `src/` 是 React/Vite 前端项目，`src-tauri/` 是 Rust/Tauri 桌面项目。后续改进不应合并这两个 `src`，而应围绕源码、生成物、运行时资源和业务分层边界继续收敛。
-
-目标：
-
-- 保持 `src/` 作为唯一前端 UI 源码目录，避免把 Tauri/Rust 逻辑、Node API 逻辑或构建产物放入前端源码树。
-- 保持 `src-tauri/src/` 作为唯一 Rust/Tauri 桌面壳源码目录；`main.rs` 只保留桌面入口，Tauri 初始化、窗口生命周期、sidecar 管理和未来 commands 放在 `lib.rs` 或拆到 `src-tauri/src/commands/`、`src-tauri/src/services/`。
-- 补齐 `src-tauri/capabilities/`。当前项目尚无该目录；当开始使用 Tauri commands、dialog、fs、shell 或插件权限时，把最小权限写入 capability 文件，不把权限隐式散落在代码中。
-- 将 `src-tauri/sidecar-node/` 明确为生成目录和打包资源目录，继续由 `scripts/build-sidecar-runtime.js` 生成并保持 Git 忽略；长期目标是缩小为 Copilot SDK provider，或被 Rust/Tauri commands 替代。
-- 新增 `src/lib/api/`，把前端 API contract、HTTP client、desktop-sidecar client 和未来 Tauri invoke client 统一起来，避免 UI 组件直接拼接 `/api`、读取全局注入变量或处理 token。
-- 继续把 `server.js` 变薄：`server/` 只作为 Express/HTTP adapter，业务逻辑迁入 `core/services/`，SQLite 访问迁入 `core/repositories/`，外部能力迁入 `core/providers/` 或 runtime adapters。
-- 保持 `setup/` 只管理 schema、seed 和迁移初始化；不要让业务查询继续扩散到 setup 脚本。
-- 保持 `public/dist/`、`data/`、`src-tauri/target/`、`src-tauri/gen/`、`src-tauri/sidecar-node/` 为构建/运行生成物，不进入源码管理。
-- `release/` 仅作为本地发布产物暂存和发布说明目录；当前构建脚本会只保留最新两个 DMG，正式发布后优先由 CI artifact 或 GitHub Releases 管理 DMG/MSI/NSIS 等二进制产物。
-
-近期结构改进优先级：
-
-1. 前端先落 `src/lib/api/`，降低 UI 与 HTTP/desktop 注入细节耦合。
-2. 后端先落 `server/app.js`、`server/routes/`、`server/middleware/`，把 Express 适配层从 `server.js` 拆出。
-3. Core 先落 `progress.service.js`、`language/localization`、`skill-root/skill-index/skill-reader`，让扫描和读取能力能被 Web、sidecar 和未来 Tauri commands 复用。
-4. Repository 再集中 SQLite 查询，避免迁移 Rust/Tauri 时重复理解 SQL 行为。
-5. Tauri commands 最后按价值迁移 filesystem、picker、SQLite、progress、error logs；Copilot SDK provider 暂时保留 Node sidecar，直到确认有稳定替代方案。
 
 ## 当前问题
 
@@ -200,86 +56,16 @@ Tauri 的基本模型是：
 4. 将数据库访问集中到 repository 层。
 5. 将本地系统能力抽象为 adapter，方便未来换成 Tauri command。
 6. 将 Copilot SDK 封装为独立 provider，避免 route 直接管理 session 生命周期。
-7. 所有阶段都应具备可运行的验证路径；实际执行规则统一见“验证与发布”。
+7. 所有阶段都必须能通过 `npm run check` 和至少一次关键 API/browser 验证。
 8. 不提交 `data/`、`public/dist/`、`node_modules/` 或本地运行产物。
-
-## 桌面 UI 布局与缩放规范
-
-Tauri WebView、浏览器调试页和 macOS 桌面窗口在滚动条、视口单位、固定定位和缩放行为上存在细微差异。后续 UI 调整必须遵守以下规则，避免重复出现侧栏错位、详情页宽度异常、滚动条遮挡和缩放后留白问题。
-
-### 缩放实现
-
-- 桌面端应用级缩放使用 Tauri `window.set_zoom(scale_factor)`，避免通过 CSS transform 缩放普通文本 UI 导致 WebView 字体模糊。
-- 浏览器调试页使用 CSS `zoom: var(--app-zoom-scale)` fallback；桌面运行时把 `--app-zoom-scale` 固定为 `1`，由 native WebView zoom 接管显示比例。
-- 不要为普通 UI 文本、Dialog、Select、按钮、侧栏 rail 添加 CSS `transform`、`translate-*`、`zoom-in-*` 或 `backdrop-blur` 等会在 Tauri WebView 中造成重采样/模糊的效果。SVG 图谱内部的 `transform="translate(...)"` 属于图形布局例外。
-- `body` 和 `#root` 保持物理视口尺寸：`width: 100vw`、`min-height: 100vh`。
-- `.app-root` 使用逻辑视口尺寸：`--app-viewport-width: calc(100vw / var(--app-zoom-scale))` 和 `--app-viewport-height: calc(100vh / var(--app-zoom-scale))`；不要在 `#root`、`.app-shell`、`.detail-main` 等嵌套容器重复应用 `--app-viewport-width`。
-- 修改缩放相关 CSS 时，应按需验证 `tests/app-zoom.test.mjs`，并在调试浏览器中至少检查 100%、120%、140% 三档下详情页右边界不越界、不出现异常大边距。是否实际运行验证命令由用户明确指示决定。
-
-### 左侧菜单
-
-- 左侧菜单必须使用专用类 `.app-sidebar` 承载固定定位规则，不要使用 `.app-shell > aside` 这类宽泛选择器，避免误伤右侧 `SkillDocPanel`。
-- 左侧菜单固定在窗口左侧，账户栏固定在菜单底部；页面滚动时侧栏整体不应跟随主内容滚动。
-- 左侧栏内部只能让 Skill 列表区域滚动，账户栏、目录选择、扫描按钮和顶部品牌区不应被滚动带走。
-- 折叠态宽度统一使用 `--app-rail-width`；展开态宽度使用 `clamp(14.5rem, 22vw, 16rem)`，不要写散落的魔法宽度。
-
-### 右侧 Skill 定义栏
-
-- 右侧 `SkillDocPanel` 和折叠 rail 的定位规则只能写在 `.skill-doc-panel` / `.skill-doc-panel.is-collapsed` 下，不能和左侧菜单共用 `aside` 选择器。
-- 页面需要稳定预留浏览器滚动条空间，使用 CSS 原生 `scrollbar-gutter: stable`。不要用 JS 计算 `window.innerWidth - document.documentElement.clientWidth` 并写入像素偏移来规避滚动条。
-- 右侧栏默认 `right: 0`，依赖 `scrollbar-gutter` 让它贴齐内容可用区域，而不是覆盖系统滚动条。
-- 右侧折叠 rail 的宽度统一使用 `--skill-doc-rail-width`，不要与左侧 rail 宽度脱钩。
-
-### 详情页内容区
-
-- `.detail-main`、`.detail-surface`、`.detail-stack` 等主内容容器必须保持 `min-width: 0`，并用 `width: 100%` / `max-width: 100%` 限制在 grid 分配的列宽内。
-- 详情页不应自行使用 viewport 宽度参与布局；它只消费 `.app-shell` 的中间列宽。
-- 图谱、长路径、Prompt 列表等可能横向撑开的内容必须在内部 scroll area 中处理，不允许撑大 `.detail-main`。
-
-### 调试与验收
-
-- 日常 UI 调整优先用调试浏览器 `http://127.0.0.1:5173` 和 `npm run desktop:dev` 验证，不默认打包或安装 DMG。
-- 只有涉及 DMG 文件本身、安装流程、Finder 图标、签名/公证、从 DMG 运行拦截或推出问题时，才运行 `npm run desktop:build:mac` 和 `hdiutil verify`。
-- 修改布局、缩放或左右侧栏时，推荐验证命令见“验证与发布”。
-- 视觉验证时至少覆盖：侧栏展开/折叠、右侧 Skill 定义栏展开/折叠、页面滚动、100%/120%/140% 缩放、详情页宽度边界。
 
 ## 推荐目标目录结构
 
 ```text
-src/
-  App.tsx
-  main.tsx
-  index.css
-  components/
-    ui/
-  lib/
-    api/                 # planned, not created yet
-      client.ts
-      contracts.ts
-      http-client.ts
-      desktop-sidecar-client.ts
-      tauri-client.ts
-    utils.ts
-  types.ts
-src-tauri/
-  Cargo.toml
-  Cargo.lock
-  build.rs
-  tauri.conf.json
-  icons/
-  capabilities/          # planned, not created yet
-    default.json
-  src/
-    main.rs
-    lib.rs
-    commands/
-    services/
-  sidecar-node/          # generated, git-ignored
 server.js
 server/
+  app.js
   config.js
-  http-response.js
-  app.js                 # planned
   routes/
     config.routes.js
     progress.routes.js
@@ -333,19 +119,13 @@ desktop/
     skills.contract.md
     analysis.contract.md
     settings.contract.md
-release/
-  README.md
-  Agent SMC_<version>_aarch64.dmg  # local ignored artifacts; latest two retained
 ```
 
 说明：
 
-- `src/` 是前端源码层，继续遵循 React/Vite 约定；`src/lib/api/` 是后续 API contract 和运行时 client 的收敛点。
-- `src-tauri/` 是 Tauri/Rust 项目层，继续遵循 Tauri 官方结构；`capabilities/` 在启用 Tauri commands/plugins 时承载最小权限配置。
 - `server/` 是当前 Web/HTTP 适配层。
 - `core/` 是可被 Express、Tauri sidecar、测试脚本和未来 Rust command 迁移参考复用的业务层。
 - `desktop/` 存放 Tauri 适配规划和 command contract，不立即引入 Tauri 依赖也能先定义边界。
-- `release/` 只保留发布说明或本地临时产物；正式二进制发布应由 CI artifact 或 release 系统承载。
 
 ## 分层设计
 
@@ -552,22 +332,22 @@ data/analysis.sqlite
 
 迁移策略：
 
-- [x] Web/dev 模式保留 `data/analysis.sqlite`。
-- [x] Desktop sidecar 模式使用 Tauri app data dir，并通过 `SKILL_ANALYSIS_DB` 指向 `analysis.sqlite`。
-- [ ] 启动时检测旧数据库并提供迁移/复制。
-- [~] 不在常规 UI 中暴露绝对内部路径；调试/日志场景仍需继续审计。
+- Web/dev 模式保留 `data/analysis.sqlite`。
+- Desktop 模式使用 Tauri app data dir。
+- 启动时检测旧数据库并提供迁移/复制。
+- 不在 UI 中暴露绝对内部路径，除非用于调试。
 
 ## 分阶段实施计划
 
-### Phase 0：现状稳定与安全网（已完成）
+### Phase 0：现状稳定与安全网
 
 目标：在拆分前建立基本安全网。
 
 任务：
 
-- [x] 保持现有 API 行为不变。
-- [x] 整理关键验证命令：`npm run check`、`npm run build`、浏览器核心流程。
-- [x] 记录关键 API：
+- 保持现有 API 行为不变。
+- 整理关键验证命令：`npm run check`、`npm run build`、浏览器核心流程。
+- 记录关键 API：
   - `/api/config`
   - `/api/skill-roots`
   - `/api/skills`
@@ -577,36 +357,35 @@ data/analysis.sqlite
   - `/api/skill-translation/cache`
   - `/api/skill-translation/generate`
   - `/api/error-logs`
-- [x] 保留现有 `server.js` 作为行为参考。
+- 保留现有 `server.js` 作为行为参考。
 
 验收：
 
-- [x] 无功能改动。
-- [x] `npm run check` 通过。
+- 无功能改动。
+- `npm run check` 通过。
 
-### Phase 1：Express route 拆分（部分完成）
+### Phase 1：Express route 拆分
 
 目标：把 HTTP route 从 `server.js` 中拆出。
 
 任务：
 
-- [x] 创建 `server/config.js` 作为低风险启动配置拆分试点。
-- [ ] 创建 `server/app.js` 负责 Express app 创建、中间件、静态资源和 route 挂载。
-- [ ] 创建 `server/routes/*.routes.js`。
-- [ ] 创建 `server/middleware/error-handler.js`。
-- [ ] `server.js` 变成启动入口：加载 config、创建 app、listen。
+- 创建 `server/app.js` 负责 Express app 创建、中间件、静态资源和 route 挂载。
+- 创建 `server/routes/*.routes.js`。
+- 创建 `server/middleware/error-handler.js`。
+- `server.js` 变成启动入口：加载 config、创建 app、listen。
 
 注意：
 
 - 不先改业务逻辑。
 - route 可以暂时从 service barrel 导入原函数。
-- 每拆一个路由文件都应具备可运行的 `npm run check` 验证路径；实际是否执行由用户明确指示决定。
+- 每拆一个路由文件都跑 `npm run check`。
 
 验收：
 
-- [x] 所有 API 路径保持不变。
-- [x] `npm run check` 通过。
-- [ ] `npm start` 可正常启动的最新轮次验证待补充。
+- 所有 API 路径保持不变。
+- `npm run check` 通过。
+- `npm start` 可正常启动。
 
 ### Phase 2：Core service 拆分
 
@@ -688,33 +467,28 @@ picker 抽象需要把“打开选择器”和“扫描目录”拆成两个步�
 - core service 可接收 runtime context。
 - 不依赖 process.cwd() 作为唯一数据根。
 
-### Phase 5：Tauri sidecar 预览版（macOS 已完成，Windows 待验证）
+### Phase 5：Tauri sidecar 预览版
 
 目标：先发布一个可用的桌面 preview。
 
 任务：
 
-- [x] 添加 `src-tauri/`。
-- [x] 让 Vite build 作为 Tauri frontendDist。
-- [x] 将 Node server 打成 sidecar 并作为应用资源打包。
-- [x] Tauri 主进程负责：
-  - [x] 启动 sidecar。
-  - [x] 分配/读取 localhost 随机端口。
-  - [x] 向前端注入 API base URL。
-  - [x] 在 WebView reload/HMR 后通过 `get_desktop_api_endpoint` command 恢复 API base URL/token。
-  - [x] 应用退出时关闭 sidecar。
-- [x] Express server 在 desktop sidecar 模式只绑定 `127.0.0.1`。
-- [x] 增加本地握手 token，前端请求带 token header。
-- [x] macOS `.dmg` 产物输出到 `release/Agent SMC_1.1.2_aarch64.dmg`。
-- [x] DMG 文件自身 Finder 图标已通过构建后脚本处理。
-- [x] `scripts/build-dmg-app.js` 会复制最新 DMG 到 `release/` 并清理旧版本，仅保留最新两个 DMG。
-- [x] 关闭主窗口时退出应用并清理 sidecar，避免安装镜像无法推出。
+- 添加 `src-tauri/`。
+- 让 Vite build 作为 Tauri frontendDist。
+- 将 Node server 打成 sidecar 或随应用启动。
+- Tauri 主进程负责：
+  - 启动 sidecar。
+  - 分配/读取 localhost 端口。
+  - 向前端注入 API base URL。
+  - 应用退出时关闭 sidecar。
+- Express server 只绑定 `127.0.0.1`。
+- 增加本地握手 token，前端请求带 token header。
 
 验收：
 
-- [x] macOS 可构建 `.app` 和 `.dmg`。
-- [ ] Windows 可打开安装包或开发版。
-- [~] Skill 扫描、逻辑图、缓存、翻译核心流程沿用 sidecar API；桌面实机完整流程仍需按测试用例逐项回归。
+- macOS 可打开 `.app`。
+- Windows 可打开安装包或开发版。
+- Skill 扫描、逻辑图、缓存、翻译核心流程可用。
 
 ### Phase 6：Tauri command 迁移
 
@@ -742,11 +516,19 @@ picker 抽象需要把“打开选择器”和“扫描目录”拆成两个步�
 - 前端 API 调用可通过 adapter 切换 HTTP 与 Tauri invoke。
 - “添加路径”在 Tauri 模式下使用 native dialog，不再通过 Express 调 `osascript` 打开 macOS 文件夹选择器。
 
-## 前端 API 适配补充
+## 前端适配建议
 
-`src/lib/api/` 是前端适配的目标收敛点，目录职责已在“目标架构与结构边界”和“推荐目标目录结构”中定义。本节只补充调用方式，避免 UI 继续直接处理 HTTP、desktop sidecar 注入和未来 Tauri invoke 细节。
+当前前端直接通过 `/api/...` 调用后端。为了适配 Tauri，应引入 API client 层：
 
-API client 的目标：
+```text
+src/lib/api/
+  client.ts
+  http-client.ts
+  tauri-client.ts
+  contracts.ts
+```
+
+目标：
 
 - UI 不直接写 fetch URL。
 - Web 模式用 HTTP client。
@@ -773,24 +555,21 @@ await api.logicMap.generate({ skill, model, language, requestId });
 - GitHub token 优先使用系统安全存储或用户环境，不写入普通配置文件。
 - 对外部命令调用设置 timeout 和参数白名单。
 
-## 验证与发布
-
-协作执行时默认不自动运行测试、构建或发布验证命令，除非用户明确要求手动验证。发布前置条件统一见“桌面发布目标”；本节集中记录阶段验收和 CI/发布动作顺序，避免签名、公证、证书和安装包要求在多处重复维护。
-
-阶段完成时的推荐验收标准：
-
-- `npm run check` 通过。
-- `npm run build` 通过，如果前端或打包相关变更。
-- 本地 `npm start` 能启动。
-- Skill root 扫描可用。
-- Skill 列表可用。
-- Skill 详情可读。
-- 规则逻辑图可显示。
-- AI 评估缓存接口不回归。
-- 错误日志接口可用。
-- 未提交 `data/`、`public/dist/`、`node_modules/`。
+## 发布流水线建议
 
 ### macOS
+
+需要准备：
+
+- Tauri build profile。
+- app icon。
+- bundle identifier。
+- Apple Developer ID certificate。
+- notarization credentials。
+- `.dmg` 产物。
+- 自动更新 signing key。
+- 如果使用 Node sidecar，准备 sidecar 打包、签名和生命周期管理策略。
+- 如果使用 GitHub Actions 等 CI，准备 `.p12` 证书的 base64 Secret、证书密码、App Store Connect API Key、Issuer ID 和 Key ID。
 
 CI 可分阶段：
 
@@ -805,6 +584,13 @@ CI 可分阶段：
 9. upload artifacts
 
 ### Windows
+
+需要准备：
+
+- WebView2 runtime 策略。
+- code signing certificate。
+- MSI/NSIS 配置。
+- 自动更新 signing key。
 
 CI 可分阶段：
 
@@ -825,15 +611,16 @@ CI 可分阶段：
 
 ## 推荐近期落地任务
 
-本节只描述下一批建议执行顺序；完成状态以“当前状态快照”和“分阶段实施计划”为准。
-
 第一批小步改造：
 
-1. 新增 `core/utils/language.js`，迁移 `normalizeLanguage`、`localize`、progress 文案。
-2. 新增 `core/services/progress.service.js`，迁移 progress store。
-3. 新增 `server/routes/config.routes.js` 和 `server/routes/progress.routes.js` 作为最小 route 拆分试点。
+1. 新增 `server/config.js`，集中端口、路径、schema version、常量。
+2. 新增 `core/utils/language.js`，迁移 `normalizeLanguage`、`localize`、progress 文案。
+3. 新增 `core/utils/hash.js`，迁移 `hashText`。
+4. 新增 `core/utils/paths.js`，迁移 `expandHomePath`、`resolveProjectPath`、`normalizeScanPath`。
+5. 新增 `core/services/progress.service.js`，迁移 progress store。
+6. 新增 `server/routes/config.routes.js` 和 `server/routes/progress.routes.js` 作为最小 route 拆分试点。
 
-这批任务风险低，能验证目录结构和 import 方式，不触碰 Copilot SDK 主流程；已完成的 `server/config.js`、`core/utils/hash.js`、`core/utils/paths.js` 和 `server/http-response.js` 不再在此重复列为待办。
+这批任务风险低，能验证目录结构和 import 方式，不触碰 Copilot SDK 主流程。
 
 第二批改造：
 
@@ -848,6 +635,21 @@ CI 可分阶段：
 2. 拆 Copilot SDK provider。
 3. 拆模型分析和翻译服务。
 4. 定义 Tauri command contract。
+
+## 验收标准
+
+每个阶段完成时至少满足：
+
+- `npm run check` 通过。
+- `npm run build` 通过，如果前端或打包相关变更。
+- 本地 `npm start` 能启动。
+- Skill root 扫描可用。
+- Skill 列表可用。
+- Skill 详情可读。
+- 规则逻辑图可显示。
+- AI 评估缓存接口不回归。
+- 错误日志接口可用。
+- 未提交 `data/`、`public/dist/`、`node_modules/`。
 
 ## 长期目标状态
 
