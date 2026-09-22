@@ -9,6 +9,7 @@ pnpm-debug.log*
 dist/
 build/
 coverage/
+.worktrees/
 data/
 src-tauri/target/
 src-tauri/gen/
