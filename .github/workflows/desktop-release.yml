@@ -171,7 +171,27 @@ jobs:
       - name: Verify macOS app signature
         if: runner.os == 'macOS'
         shell: bash
-        run: codesign --verify --deep --strict --verbose=2 "src-tauri/target/${{ matrix.target }}/release/bundle/macos/Agent SMC.app"
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          dmg_dir="src-tauri/target/${TARGET}/release/bundle/dmg"
+          dmgs=$(find "$dmg_dir" -maxdepth 1 -type f -name '*.dmg' -print)
+          dmg_count=$(printf '%s\n' "$dmgs" | sed '/^$/d' | wc -l | tr -d ' ')
+          if [ "$dmg_count" -ne 1 ]; then
+            echo "::error::Expected one DMG in $dmg_dir, found $dmg_count"
+            exit 1
+          fi
+
+          dmg=$(printf '%s\n' "$dmgs" | sed -n '1p')
+          mount_dir=$(mktemp -d)
+          cleanup() {
+            hdiutil detach "$mount_dir" >/dev/null 2>&1 || true
+            rmdir "$mount_dir" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          hdiutil attach -readonly -nobrowse -mountpoint "$mount_dir" "$dmg" >/dev/null
+          codesign --verify --deep --strict --verbose=2 "$mount_dir/Agent SMC.app"
 
       - name: Collect installer
         id: asset

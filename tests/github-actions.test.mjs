@@ -43,6 +43,8 @@ test("desktop release builds all native targets before publishing", () => {
   assert.match(release, /SHA256SUMS\.txt/);
   assert.match(release, /--draft=false/);
   assert.match(release, /concurrency:/);
+  assert.match(release, /hdiutil attach[\s\S]*codesign --verify --deep --strict[\s\S]*Agent SMC\.app/);
+  assert.doesNotMatch(release, /codesign --verify[^\n]*bundle\/macos\/Agent SMC\.app/);
   assert.match(release, /gh release view "\$TAG" --json isDraft,targetCommitish,tagName/);
   assert.match(release, /Validate draft release before upload/);
   assert.match(release, /Remove stale draft assets/);
