@@ -163,6 +163,8 @@ AI analysis and translation cache entries also store `model`, `content_hash`, ti
 | `GET /api/skills/:name` | Reads Skill details, files, and local rule analysis. |
 | `GET /api/auth/github/status` | Reads GitHub CLI and Copilot readiness. |
 | `POST /api/auth/github/login` | Returns GitHub CLI login/scope guidance. |
+| `POST /api/auth/github/device/start` | Starts GitHub Device OAuth for desktop login. |
+| `POST /api/auth/github/device/poll` | Polls the active GitHub Device OAuth request. |
 | `POST /api/auth/github/logout` | Logs out the current GitHub CLI identity. |
 | `GET /api/models` | Returns fallback models or live Copilot models with `?live=1`. |
 | `POST /api/logic-map/cache` | Checks cached model analysis. |
@@ -175,7 +177,7 @@ AI analysis and translation cache entries also store `model`, `content_hash`, ti
 
 - Node.js with `node:sqlite` support. Node 22+ is recommended.
 - npm.
-- GitHub CLI (`gh`) for auth status, logout, and Copilot scope guidance.
+- GitHub CLI (`gh`) is optional for web-mode auth status, logout, and Copilot scope guidance. Desktop builds support GitHub Device OAuth.
 - GitHub Copilot access for live model listing, AI evaluation, and Skill.md translation.
 - macOS for the native folder picker endpoint (`osascript`). Direct filesystem scanning still uses Node APIs.
 
@@ -190,14 +192,23 @@ gh auth refresh --scopes copilot
 
 ```bash
 npm install      # install dependencies
+npm test         # run Node contract and runtime tests
 npm run check    # node --check server.js && tsc --noEmit
 npm run build    # build frontend to public/dist
 npm start        # npm run build && node server.js
 npm stop         # stop the process listening on PORT
 npm run dev      # Vite dev server on 127.0.0.1:5173 with /api proxy
+npm run desktop:build:mac       # macOS ARM64 DMG
+npm run desktop:build:windows   # Windows NSIS installer
 ```
 
 For `npm run dev`, run `node server.js` separately for the API on `http://localhost:4173`.
+
+## Desktop Releases
+
+GitHub Releases provide `Agent-SMC-<version>-macos-arm64.dmg`, `Agent-SMC-<version>-windows-x64-setup.exe`, `Agent-SMC-<version>-windows-arm64-setup.exe`, and `SHA256SUMS.txt`. Use macOS ARM64 for Apple silicon, Windows x64 for Intel/AMD PCs, and Windows ARM64 for Snapdragon/Windows on ARM PCs.
+
+The desktop app bundles Node.js. It stores its SQLite database in the Tauri app data directory, typically `~/Library/Application Support/com.edwindigital.agent-smc/` on macOS and `%APPDATA%\com.edwindigital.agent-smc\` on Windows. The macOS package is ad-hoc signed but not notarized; Windows installers are unsigned and may show SmartScreen warnings.
 
 ## Configuration
 

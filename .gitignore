@@ -15,3 +15,6 @@ src-tauri/target/
 src-tauri/gen/
 src-tauri/sidecar-node/
 release/*.dmg
+release/*.exe
+release/*.msi
+release/SHA256SUMS.txt

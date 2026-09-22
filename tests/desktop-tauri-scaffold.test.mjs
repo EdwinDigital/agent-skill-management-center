@@ -58,11 +58,14 @@ test("Tauri bundle declares application icons", () => {
   ]);
 });
 
-test("release directory documents macOS DMG publishing", () => {
+test("release directory documents cross-platform desktop publishing", () => {
   const readme = fs.readFileSync(new URL("../release/README.md", import.meta.url), "utf8");
 
   assert.match(readme, /DMG/);
+  assert.match(readme, /NSIS/);
   assert.match(readme, /Agent SMC/);
   assert.match(readme, /npm run desktop:build:mac/);
-  assert.match(readme, /target\/release\/bundle\/dmg/);
+  assert.match(readme, /target\/<target-triple>\/release\/bundle\/dmg/);
+  assert.match(readme, /windows-x64-setup\.exe/);
+  assert.match(readme, /windows-arm64-setup\.exe/);
 });

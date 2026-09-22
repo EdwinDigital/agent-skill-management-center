@@ -163,6 +163,8 @@ AI 分析和翻译缓存还保存 `model`、`content_hash`、时间戳以及序�
 | `GET /api/skills/:name` | 读取 Skill 详情、文件和本地规则分析。 |
 | `GET /api/auth/github/status` | 读取 GitHub CLI 和 Copilot 就绪状态。 |
 | `POST /api/auth/github/login` | 返回 GitHub CLI 登录/scope 指引。 |
+| `POST /api/auth/github/device/start` | 启动桌面端 GitHub Device OAuth 登录。 |
+| `POST /api/auth/github/device/poll` | 轮询当前 GitHub Device OAuth 请求。 |
 | `POST /api/auth/github/logout` | 注销当前 GitHub CLI 身份。 |
 | `GET /api/models` | 返回 fallback 模型；带 `?live=1` 时返回 live Copilot 模型。 |
 | `POST /api/logic-map/cache` | 检查缓存的模型分析。 |
@@ -175,7 +177,7 @@ AI 分析和翻译缓存还保存 `model`、`content_hash`、时间戳以及序�
 
 - 支持 `node:sqlite` 的 Node.js。推荐 Node 22+。
 - npm。
-- GitHub CLI (`gh`)，用于认证状态、注销和 Copilot scope 指引。
+- GitHub CLI (`gh`) 在 Web 模式下可用于认证状态、注销和 Copilot scope 指引；桌面端支持 GitHub Device OAuth，不要求预装 `gh`。
 - GitHub Copilot 权限，用于 live 模型列表、AI 评估和 Skill.md 翻译。
 - macOS，用于原生文件夹选择器接口（`osascript`）。直接文件系统扫描仍使用 Node API。
 
@@ -190,14 +192,23 @@ gh auth refresh --scopes copilot
 
 ```bash
 npm install      # 安装依赖
+npm test         # 运行 Node 契约与运行时测试
 npm run check    # node --check server.js && tsc --noEmit
 npm run build    # 构建前端到 public/dist
 npm start        # npm run build && node server.js
 npm stop         # 停止监听 PORT 的进程
 npm run dev      # Vite 开发服务器，运行在 127.0.0.1:5173，并代理 /api
+npm run desktop:build:mac       # 构建 macOS ARM64 DMG
+npm run desktop:build:windows   # 构建 Windows NSIS 安装包
 ```
 
 使用 `npm run dev` 时，需要单独运行 `node server.js`，让 API 监听 `http://localhost:4173`。
+
+## 桌面版发布
+
+GitHub Release 提供 `Agent-SMC-<version>-macos-arm64.dmg`、`Agent-SMC-<version>-windows-x64-setup.exe`、`Agent-SMC-<version>-windows-arm64-setup.exe` 和 `SHA256SUMS.txt`。Apple 芯片 Mac 选择 macOS ARM64；Intel/AMD Windows 电脑选择 Windows x64；Snapdragon/Windows on ARM 电脑选择 Windows ARM64。
+
+桌面应用已内置 Node.js。SQLite 数据库保存在 Tauri 应用数据目录中，macOS 通常为 `~/Library/Application Support/com.edwindigital.agent-smc/`，Windows 通常为 `%APPDATA%\com.edwindigital.agent-smc\`。macOS 安装包使用 ad-hoc 签名但未公证；Windows 安装包未代码签名，可能显示 SmartScreen 提示。
 
 ## 配置
 

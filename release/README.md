@@ -1,26 +1,34 @@
-# Tauri macOS DMG Release Folder
+# Tauri Desktop Release Folder
 
-This folder is reserved for publishing macOS desktop builds of Agent SMC.
+This folder is reserved for local release-ready Agent SMC desktop artifacts. GitHub Actions publishes installers directly to the matching GitHub Release, so generated files in this directory remain ignored.
 
-Build a local DMG with:
+Local build commands:
 
 ```bash
-npm run desktop:build:mac
+npm run desktop:build:mac       # macOS ARM64 DMG
+npm run desktop:build:windows   # Windows NSIS installer
 ```
 
-Tauri writes the generated DMG to:
+Tauri writes bundles under the target-specific directory:
 
 ```text
-src-tauri/target/release/bundle/dmg/
+src-tauri/target/<target-triple>/release/bundle/dmg/
+src-tauri/target/<target-triple>/release/bundle/nsis/
 ```
 
-Copy signed, notarized, and release-ready DMG artifacts into this `release/` folder when preparing a manual distribution package. Do not commit generated `.dmg` files unless the release process explicitly requires it.
+The `v1.0.0` GitHub Release uses these names:
 
-Current desktop scope:
+```text
+Agent-SMC-1.0.0-macos-arm64.dmg
+Agent-SMC-1.0.0-windows-x64-setup.exe
+Agent-SMC-1.0.0-windows-arm64-setup.exe
+SHA256SUMS.txt
+```
 
-- React/Vite is used as the Tauri WebView UI.
-- The first scaffold keeps the existing web build path: `public/dist`.
-- The Node/Express API sidecar is bundled as a Tauri resource under `sidecar-node` and started by the desktop shell on a random local port.
-- Generated DMG artifacts are copied here for manual distribution; `release/*.dmg` remains ignored by Git.
-- Each macOS desktop build prunes this folder to keep only the latest two DMG versions.
-- macOS signing, notarization, stapling, and updater signing remain release pipeline tasks.
+Architecture selection:
+
+- `macos-arm64`: Apple silicon Macs running macOS 12 or later.
+- `windows-x64`: Intel/AMD Windows PCs.
+- `windows-arm64`: Snapdragon and other Windows on ARM PCs.
+
+The desktop bundle includes Node.js and the Node/Express sidecar; users do not need to install Node. The macOS build uses ad-hoc signing and is not notarized. Windows installers are unsigned and may trigger SmartScreen. Application data is stored in the Tauri app data directory, typically `~/Library/Application Support/com.edwindigital.agent-smc/` on macOS and `%APPDATA%\com.edwindigital.agent-smc\` on Windows.
