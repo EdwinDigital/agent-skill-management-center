@@ -16,14 +16,15 @@ concurrency:
 
 jobs:
   quality:
-    name: Linux quality gates
-    runs-on: ubuntu-latest
+    name: macOS ARM64 quality gates
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
           node-version: "24.11.1"
+          architecture: arm64
           cache: npm
 
       - name: Install Node dependencies
@@ -38,17 +39,12 @@ jobs:
       - name: Build frontend
         run: npm run build
 
-      - name: Install Tauri Linux prerequisites
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
-
       - name: Check Rust desktop shell
         run: |
           rustup update stable --no-self-update
           rustup default stable
-          mkdir -p src-tauri/sidecar-node
-          cargo check --manifest-path src-tauri/Cargo.toml
+          rustup target add aarch64-apple-darwin
+          cargo check --manifest-path src-tauri/Cargo.toml --target aarch64-apple-darwin
 
   windows-paths:
     name: Windows path and sidecar tests

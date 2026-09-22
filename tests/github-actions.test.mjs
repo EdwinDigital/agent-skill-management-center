@@ -6,18 +6,19 @@ const ci = readOptionalWorkflow("ci.yml");
 const release = readOptionalWorkflow("desktop-release.yml");
 const yaml = await import("yaml").catch(() => null);
 
-test("CI runs read-only quality gates on main, pull requests, and Windows", () => {
+test("CI runs read-only quality gates on main, pull requests, macOS, and Windows", () => {
   assert.ok(ci, "ci.yml must exist");
   assert.match(ci, /pull_request:/);
   assert.match(ci, /push:[\s\S]*branches:[\s\S]*main/);
   assert.match(ci, /permissions:[\s\S]*contents: read/);
   assert.match(ci, /cancel-in-progress: true/);
-  assert.match(ci, /ubuntu-latest/);
+  assert.match(ci, /macos-14/);
   assert.match(ci, /windows-latest/);
+  assert.doesNotMatch(ci, /ubuntu-latest|Tauri Linux prerequisites|webkit2gtk/);
   assert.match(ci, /node-version: "24\.11\.1"/);
   assert.match(ci, /npm test/);
   assert.match(ci, /npm run check/);
-  assert.match(ci, /npm run build[\s\S]*mkdir -p src-tauri\/sidecar-node[\s\S]*cargo check/);
+  assert.match(ci, /npm run build[\s\S]*rustup target add aarch64-apple-darwin[\s\S]*cargo check .*--target aarch64-apple-darwin/);
 });
 
 test("desktop release builds all native targets before publishing", () => {
@@ -59,7 +60,7 @@ test("workflow YAML parses into the expected job and permission structure", () =
 
   assert.deepEqual(ciConfig.on.push.branches, ["main"]);
   assert.equal(ciConfig.permissions.contents, "read");
-  assert.equal(ciConfig.jobs.quality["runs-on"], "ubuntu-latest");
+  assert.equal(ciConfig.jobs.quality["runs-on"], "macos-14");
   assert.equal(ciConfig.jobs["windows-paths"]["runs-on"], "windows-latest");
   assert.equal(releaseConfig.permissions.contents, "read");
   assert.equal(releaseConfig.jobs.prepare.permissions.contents, "write");
