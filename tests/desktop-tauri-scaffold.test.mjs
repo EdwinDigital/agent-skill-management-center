@@ -8,8 +8,10 @@ const cargoToml = fs.readFileSync(new URL("../src-tauri/Cargo.toml", import.meta
 const tauriLib = fs.readFileSync(new URL("../src-tauri/src/lib.rs", import.meta.url), "utf8");
 
 test("package scripts expose Tauri desktop workflows", () => {
-  assert.equal(packageJson.scripts["desktop:dev"], "npx @tauri-apps/cli@latest dev");
-  assert.equal(packageJson.scripts["desktop:build:mac"], "npx @tauri-apps/cli@latest build --bundles dmg && node scripts/build-dmg-app.js");
+  assert.equal(packageJson.scripts["desktop:dev"], "tauri dev");
+  assert.equal(packageJson.scripts["desktop:build"], "tauri build");
+  assert.equal(packageJson.scripts["desktop:build:mac"], "tauri build --bundles dmg && node scripts/build-dmg-app.js");
+  assert.equal(packageJson.scripts["desktop:build:windows"], "tauri build --bundles nsis");
   assert.equal(fs.existsSync(new URL("../scripts/build-dmg-app.js", import.meta.url)), true);
 });
 
@@ -41,9 +43,9 @@ test("Tauri exposes native WebView zoom for desktop app scaling", () => {
 });
 
 test("desktop release version is synchronized across package and Tauri metadata", () => {
-  assert.equal(packageJson.version, "1.1.2");
+  assert.equal(packageJson.version, "1.0.0");
   assert.equal(tauriConfig.version, packageJson.version);
-  assert.match(cargoToml, /version = "1\.1\.2"/);
+  assert.match(cargoToml, /version = "1\.0\.0"/);
 });
 
 test("Tauri bundle declares application icons", () => {

@@ -1,6 +1,6 @@
 {
   "name": "skill-logic-visualizer",
-  "version": "1.1.2",
+  "version": "1.0.0",
   "description": "A local web app for visualizing Skill execution logic and tool usage.",
   "type": "module",
   "scripts": {
@@ -10,8 +10,11 @@
     "start": "npm run build && node server.js",
     "stop": "node scripts/stop.js",
     "check": "node --check server.js && tsc --noEmit",
-    "desktop:dev": "npx @tauri-apps/cli@latest dev",
-    "desktop:build:mac": "npx @tauri-apps/cli@latest build --bundles dmg && node scripts/build-dmg-app.js"
+    "test": "node --test tests/*.test.mjs",
+    "desktop:dev": "tauri dev",
+    "desktop:build": "tauri build",
+    "desktop:build:mac": "tauri build --bundles dmg && node scripts/build-dmg-app.js",
+    "desktop:build:windows": "tauri build --bundles nsis"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.2.9",
@@ -36,6 +39,7 @@
     "vite": "^8.0.16"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "2.11.4",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3"
   }
