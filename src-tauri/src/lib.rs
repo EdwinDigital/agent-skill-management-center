@@ -2,10 +2,11 @@ use std::{
     io::{BufRead, BufReader},
     process::{Child, Command, Stdio},
     sync::{mpsc, Mutex},
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::Duration,
 };
 
 use tauri::{Manager, WebviewWindow, WindowEvent};
+use uuid::Uuid;
 
 const APP_WINDOW_TITLE: &str = "Agent Skills Management Center-SMC";
 const DEV_WINDOW_TITLE: &str = "Agent Skills Management Center-SMC 「DEV」";
@@ -201,9 +202,5 @@ fn inject_api_endpoint(
 }
 
 fn create_sidecar_token() -> String {
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_nanos())
-        .unwrap_or_default();
-    format!("agent-smc-{nanos}-{}", std::process::id())
+    format!("agent-smc-{}", Uuid::new_v4().simple())
 }

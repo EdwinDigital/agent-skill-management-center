@@ -40,6 +40,7 @@ test("frontend waits for an explicit click before opening the GitHub device page
   assert.match(appSource, /window\.open\("about:blank", "_blank"\)/);
   assert.match(appSource, /authWindow\.location\.href = auth\.verification_uri/);
   assert.doesNotMatch(appSource, /onClick=\{githubDeviceAuth \? \(\) => void openGitHubDevicePage/);
+  assert.doesNotMatch(serverSource, /openExternalUrl\(auth\.verification_uri\)/);
 });
 
 test("frontend writes device code to clipboard before opening the browser", () => {

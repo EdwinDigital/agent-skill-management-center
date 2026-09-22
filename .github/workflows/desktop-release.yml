@@ -9,6 +9,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: desktop-release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   prepare:
     name: Prepare draft release
@@ -18,6 +22,7 @@ jobs:
     outputs:
       tag: ${{ steps.meta.outputs.tag }}
       version: ${{ steps.meta.outputs.version }}
+      commit: ${{ steps.meta.outputs.commit }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -51,8 +56,10 @@ jobs:
             tag="$expected_tag"
           fi
 
+          release_commit=$(git rev-parse HEAD)
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "version=$package_version" >> "$GITHUB_OUTPUT"
+          echo "commit=$release_commit" >> "$GITHUB_OUTPUT"
 
       - name: Create draft release if absent
         shell: bash
@@ -60,8 +67,22 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.meta.outputs.tag }}
           VERSION: ${{ steps.meta.outputs.version }}
+          COMMIT: ${{ steps.meta.outputs.commit }}
         run: |
           if gh release view "$TAG" >/dev/null 2>&1; then
+            release_json=$(gh release view "$TAG" --json isDraft,targetCommitish,tagName)
+            is_draft=$(printf '%s' "$release_json" | jq -r '.isDraft')
+            target_commitish=$(printf '%s' "$release_json" | jq -r '.targetCommitish')
+            release_tag=$(printf '%s' "$release_json" | jq -r '.tagName')
+            tag_commit=$(git rev-list -n 1 "$TAG" 2>/dev/null || true)
+            if [ "$is_draft" != "true" ]; then
+              echo "::error::Existing release $TAG is already public; refusing to overwrite assets"
+              exit 1
+            fi
+            if [ "$release_tag" != "$TAG" ] || [ "$target_commitish" != "$COMMIT" ] || [ "$tag_commit" != "$COMMIT" ]; then
+              echo "::error::Existing draft release does not target commit $COMMIT"
+              exit 1
+            fi
             echo "Reusing existing release $TAG"
             exit 0
           fi
@@ -83,7 +104,7 @@ jobs:
 
           gh release create "$TAG" \
             --draft \
-            --target "${{ github.sha }}" \
+            --target "$COMMIT" \
             --title "Agent SMC $TAG" \
             --notes-file notes.md
 
@@ -191,6 +212,10 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Download installers
         uses: actions/download-artifact@v4
         with:
@@ -224,6 +249,39 @@ jobs:
             cd release-assets
             sha256sum "${expected[@]}" > SHA256SUMS.txt
           )
+
+      - name: Validate draft release before upload
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          COMMIT: ${{ needs.prepare.outputs.commit }}
+        run: |
+          release_json=$(gh release view "$TAG" --json isDraft,targetCommitish,tagName)
+          is_draft=$(printf '%s' "$release_json" | jq -r '.isDraft')
+          target_commitish=$(printf '%s' "$release_json" | jq -r '.targetCommitish')
+          release_tag=$(printf '%s' "$release_json" | jq -r '.tagName')
+          tag_commit=$(git rev-list -n 1 "$TAG" 2>/dev/null || true)
+          if [ "$is_draft" != "true" ] || [ "$release_tag" != "$TAG" ]; then
+            echo "::error::Release $TAG must still be a draft before upload"
+            exit 1
+          fi
+          if [ "$target_commitish" != "$COMMIT" ] || [ "$tag_commit" != "$COMMIT" ]; then
+            echo "::error::Release $TAG does not target commit $COMMIT"
+            exit 1
+          fi
+
+      - name: Remove stale draft assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          gh release view "$TAG" --json assets --jq '.assets[].name' --repo "${{ github.repository }}" | while IFS= read -r asset; do
+            if [ -n "$asset" ]; then
+              gh release delete-asset "$TAG" "$asset" --yes --repo "${{ github.repository }}"
+            fi
+          done
 
       - name: Upload complete asset set
         shell: bash

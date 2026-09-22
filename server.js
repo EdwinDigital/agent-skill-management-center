@@ -177,7 +177,6 @@ app.post("/api/auth/github/login", async (_request, response) => {
 app.post("/api/auth/github/device/start", async (_request, response) => {
   try {
     const auth = await startGitHubDeviceFlow();
-    await openExternalUrl(auth.verification_uri);
     response.json(auth);
   } catch (error) {
     sendJsonError(response, _request, 500, error, { scope: "github-oauth-start" });
@@ -1659,20 +1658,7 @@ async function getGitHubAuthStatus({ checkCli = false } = {}) {
   const storedOAuth = getStoredGitHubOAuthToken();
   const hasGitHubToken = Boolean(getConfiguredGitHubToken());
   if (storedOAuth && !checkCli) {
-    return {
-      cliInstalled: true,
-      tokenAvailable: true,
-      authenticated: true,
-      ready: true,
-      login: storedOAuth.login || "GitHub",
-      name: "",
-      avatarUrl: storedOAuth.avatar_url || "",
-      scopes: splitGitHubScopes(storedOAuth.scope),
-      needsCopilotScope: !splitGitHubScopes(storedOAuth.scope).includes("copilot"),
-      authRequired: false,
-      message: "GitHub OAuth token is stored locally.",
-      command: ""
-    };
+    return buildStoredOAuthStatus(storedOAuth);
   }
 
   if (storedOAuth && checkCli) {
@@ -1681,20 +1667,7 @@ async function getGitHubAuthStatus({ checkCli = false } = {}) {
       if ((user.login || user.avatarUrl) && (user.login !== storedOAuth.login || user.avatarUrl !== storedOAuth.avatar_url)) {
         updateStoredGitHubOAuthIdentity({ login: user.login, avatarUrl: user.avatarUrl });
       }
-      return {
-        cliInstalled: true,
-        tokenAvailable: true,
-        authenticated: true,
-        ready: true,
-        login: user.login || storedOAuth.login || "GitHub",
-        name: "",
-        avatarUrl: user.avatarUrl || storedOAuth.avatar_url || "",
-        scopes: splitGitHubScopes(storedOAuth.scope),
-        needsCopilotScope: !splitGitHubScopes(storedOAuth.scope).includes("copilot"),
-        authRequired: false,
-        message: "GitHub OAuth token is stored locally.",
-        command: ""
-      };
+      return buildStoredOAuthStatus(storedOAuth, user);
     } catch {
       clearStoredGitHubOAuthToken();
     }
@@ -1750,6 +1723,27 @@ async function getGitHubAuthStatus({ checkCli = false } = {}) {
       ...buildGitHubAuthGuide({ authenticated: false, needsCopilotScope: false, cliInstalled: !cliMissing, tokenAvailable: hasGitHubToken })
     };
   }
+}
+
+function buildStoredOAuthStatus(storedOAuth, identity = {}) {
+  const scopes = splitGitHubScopes(storedOAuth.scope);
+  const needsCopilotScope = !scopes.includes("copilot");
+  return {
+    cliInstalled: true,
+    tokenAvailable: true,
+    authenticated: true,
+    ready: !needsCopilotScope,
+    login: identity.login || storedOAuth.login || "GitHub",
+    name: "",
+    avatarUrl: identity.avatarUrl || storedOAuth.avatar_url || "",
+    scopes,
+    needsCopilotScope,
+    authRequired: needsCopilotScope,
+    message: needsCopilotScope
+      ? "GitHub OAuth is missing the Copilot scope. Sign in again to continue."
+      : "GitHub OAuth token is stored locally.",
+    command: ""
+  };
 }
 
 function buildGitHubAuthGuide(status = {}) {
@@ -1897,22 +1891,6 @@ async function fetchGitHubUser(accessToken) {
     login: user.login || "",
     avatarUrl: user.avatar_url || ""
   };
-}
-
-async function openExternalUrl(url) {
-  try {
-    if (process.platform === "darwin") {
-      await execFileAsync("open", [url], { timeout: 5000 });
-      return;
-    }
-    if (process.platform === "win32") {
-      await execFileAsync("cmd", ["/c", "start", "", url], { timeout: 5000 });
-      return;
-    }
-    await execFileAsync("xdg-open", [url], { timeout: 5000 });
-  } catch (error) {
-    logServerError(error, { scope: "github-oauth-open-url", level: "warn", silent: true });
-  }
 }
 
 function storeGitHubOAuthToken({ accessToken, tokenType, scope, login, avatarUrl }) {

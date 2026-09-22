@@ -55,6 +55,11 @@ test("server supports desktop sidecar host, random port, token, and readiness ou
   assert.match(serverSource, /AGENT_SMC_READY/);
 });
 
+test("Rust generates the sidecar token with a cryptographically random UUID", () => {
+  assert.match(tauriSource, /Uuid::new_v4\(\)/);
+  assert.doesNotMatch(tauriSource, /SystemTime|UNIX_EPOCH/);
+});
+
 test("sidecar build targets the current native platform and bundles Node", () => {
   assert.match(sidecarBuildSource, /copyCopilotNativeRuntimeCompat/);
   assert.match(sidecarBuildSource, /const nativeTarget = `\$\{process\.platform\}-\$\{process\.arch\}`/);

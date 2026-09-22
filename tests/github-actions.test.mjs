@@ -4,6 +4,7 @@ import test from "node:test";
 
 const ci = readOptionalWorkflow("ci.yml");
 const release = readOptionalWorkflow("desktop-release.yml");
+const yaml = await import("yaml").catch(() => null);
 
 test("CI runs read-only quality gates on main, pull requests, and Windows", () => {
   assert.ok(ci, "ci.yml must exist");
@@ -40,10 +41,32 @@ test("desktop release builds all native targets before publishing", () => {
   assert.match(release, /Agent-SMC-\$\{version\}-windows-arm64-setup\.exe/);
   assert.match(release, /SHA256SUMS\.txt/);
   assert.match(release, /--draft=false/);
+  assert.match(release, /concurrency:/);
+  assert.match(release, /gh release view "\$TAG" --json isDraft,targetCommitish,tagName/);
+  assert.match(release, /Validate draft release before upload/);
+  assert.match(release, /Remove stale draft assets/);
+  assert.match(release, /gh release delete-asset "\$TAG" "\$asset" --yes/);
 
   const buildJob = release.match(/\n  build:[\s\S]*?\n  publish:/)?.[0] || "";
   assert.doesNotMatch(buildJob, /gh release upload/);
   assert.doesNotMatch(buildJob, /mapfile/);
+});
+
+test("workflow YAML parses into the expected job and permission structure", () => {
+  assert.ok(yaml, "the yaml parser must be installed for structured workflow validation");
+  const ciConfig = yaml.parse(ci);
+  const releaseConfig = yaml.parse(release);
+
+  assert.deepEqual(ciConfig.on.push.branches, ["main"]);
+  assert.equal(ciConfig.permissions.contents, "read");
+  assert.equal(ciConfig.jobs.quality["runs-on"], "ubuntu-latest");
+  assert.equal(ciConfig.jobs["windows-paths"]["runs-on"], "windows-latest");
+  assert.equal(releaseConfig.permissions.contents, "read");
+  assert.equal(releaseConfig.jobs.prepare.permissions.contents, "write");
+  assert.equal(releaseConfig.jobs.publish.permissions.contents, "write");
+  assert.deepEqual(releaseConfig.jobs.publish.needs, ["prepare", "build"]);
+  assert.equal(releaseConfig.jobs.build.strategy["fail-fast"], false);
+  assert.equal(releaseConfig.jobs.build.strategy.matrix.include.length, 3);
 });
 
 function readOptionalWorkflow(fileName) {
