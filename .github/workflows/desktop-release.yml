@@ -1,0 +1,239 @@
+name: Desktop Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    name: Prepare draft release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.11.1"
+
+      - name: Validate release versions and tag
+        id: meta
+        shell: bash
+        run: |
+          package_version=$(node -p "require('./package.json').version")
+          tauri_version=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          cargo_version=$(node -e "const fs=require('fs'); const text=fs.readFileSync('src-tauri/Cargo.toml','utf8'); const match=text.match(/^version = \"([^\"]+)\"/m); if (!match) process.exit(1); process.stdout.write(match[1]);")
+          expected_tag="v${package_version}"
+
+          if [ "$package_version" != "$tauri_version" ] || [ "$package_version" != "$cargo_version" ]; then
+            echo "::error::Version mismatch: package=$package_version tauri=$tauri_version cargo=$cargo_version"
+            exit 1
+          fi
+
+          if [ "${{ github.event_name }}" = "push" ]; then
+            tag="${{ github.ref_name }}"
+            if [ "$tag" != "$expected_tag" ]; then
+              echo "::error::Release tag $tag does not match package version $expected_tag"
+              exit 1
+            fi
+          else
+            tag="$expected_tag"
+          fi
+
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=$package_version" >> "$GITHUB_OUTPUT"
+
+      - name: Create draft release if absent
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.meta.outputs.tag }}
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Reusing existing release $TAG"
+            exit 0
+          fi
+
+          cat > notes.md <<EOF
+          Agent SMC ${VERSION} is the first cross-platform desktop release.
+
+          ### Downloads
+
+          | Asset | Platform |
+          | --- | --- |
+          | \`Agent-SMC-${VERSION}-macos-arm64.dmg\` | Apple silicon, macOS 12+ |
+          | \`Agent-SMC-${VERSION}-windows-x64-setup.exe\` | Intel/AMD Windows |
+          | \`Agent-SMC-${VERSION}-windows-arm64-setup.exe\` | Windows on ARM |
+          | \`SHA256SUMS.txt\` | SHA-256 checksums |
+
+          The desktop app includes Node.js. Windows installers are unsigned and may show SmartScreen warnings. The macOS app uses ad-hoc signing and is not notarized, so first launch may require approval in System Settings > Privacy & Security.
+          EOF
+
+          gh release create "$TAG" \
+            --draft \
+            --target "${{ github.sha }}" \
+            --title "Agent SMC $TAG" \
+            --notes-file notes.md
+
+  build:
+    name: ${{ matrix.name }}
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macos-arm64
+            os: macos-14
+            node-arch: arm64
+            target: aarch64-apple-darwin
+            bundle: dmg
+            bundle-dir: dmg
+            artifact-glob: "*.dmg"
+            asset-suffix: macos-arm64.dmg
+          - name: windows-x64
+            os: windows-latest
+            node-arch: x64
+            target: x86_64-pc-windows-msvc
+            bundle: nsis
+            bundle-dir: nsis
+            artifact-glob: "*.exe"
+            asset-suffix: windows-x64-setup.exe
+          - name: windows-arm64
+            os: windows-11-arm
+            node-arch: arm64
+            target: aarch64-pc-windows-msvc
+            bundle: nsis
+            bundle-dir: nsis
+            artifact-glob: "*.exe"
+            asset-suffix: windows-arm64-setup.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.11.1"
+          architecture: ${{ matrix.node-arch }}
+          cache: npm
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Run Node tests
+        run: npm test
+
+      - name: Run source checks
+        run: npm run check
+
+      - name: Install Rust target
+        shell: bash
+        run: |
+          rustup update stable --no-self-update
+          rustup default stable
+          rustup target add "${{ matrix.target }}"
+
+      - name: Build desktop installer
+        run: npm run desktop:build -- --target ${{ matrix.target }} --bundles ${{ matrix.bundle }}
+
+      - name: Verify macOS app signature
+        if: runner.os == 'macOS'
+        shell: bash
+        run: codesign --verify --deep --strict --verbose=2 "src-tauri/target/${{ matrix.target }}/release/bundle/macos/Agent SMC.app"
+
+      - name: Collect installer
+        id: asset
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+          BUNDLE_DIR: ${{ matrix.bundle-dir }}
+          ARTIFACT_GLOB: ${{ matrix.artifact-glob }}
+          ASSET_SUFFIX: ${{ matrix.asset-suffix }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          search_dir="src-tauri/target/${TARGET}/release/bundle/${BUNDLE_DIR}"
+          artifacts=$(find "$search_dir" -maxdepth 1 -type f -name "$ARTIFACT_GLOB" -print)
+          artifact_count=$(printf '%s\n' "$artifacts" | sed '/^$/d' | wc -l | tr -d ' ')
+          if [ "$artifact_count" -ne 1 ]; then
+            echo "::error::Expected one installer in $search_dir, found $artifact_count"
+            printf '%s\n' "$artifacts"
+            exit 1
+          fi
+          artifact=$(printf '%s\n' "$artifacts" | sed -n '1p')
+          mkdir -p release-upload
+          asset_path="release-upload/Agent-SMC-${VERSION}-${ASSET_SUFFIX}"
+          cp "$artifact" "$asset_path"
+          echo "asset_path=$asset_path" >> "$GITHUB_OUTPUT"
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.name }}
+          path: ${{ steps.asset.outputs.asset_path }}
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish complete desktop release
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download installers
+        uses: actions/download-artifact@v4
+        with:
+          pattern: desktop-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Verify assets and generate checksums
+        shell: bash
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          version="$VERSION"
+          expected=(
+            "Agent-SMC-${version}-macos-arm64.dmg"
+            "Agent-SMC-${version}-windows-x64-setup.exe"
+            "Agent-SMC-${version}-windows-arm64-setup.exe"
+          )
+          for asset in "${expected[@]}"; do
+            if [ ! -f "release-assets/$asset" ]; then
+              echo "::error::Missing release asset: $asset"
+              exit 1
+            fi
+          done
+          if [ "$(find release-assets -maxdepth 1 -type f | wc -l | tr -d ' ')" -ne 3 ]; then
+            echo "::error::Unexpected files in release-assets"
+            find release-assets -maxdepth 1 -type f -print
+            exit 1
+          fi
+          (
+            cd release-assets
+            sha256sum "${expected[@]}" > SHA256SUMS.txt
+          )
+
+      - name: Upload complete asset set
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: gh release upload "$TAG" release-assets/* --clobber --repo "${{ github.repository }}"
+
+      - name: Publish release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "${{ needs.prepare.outputs.tag }}" --draft=false --repo "${{ github.repository }}"

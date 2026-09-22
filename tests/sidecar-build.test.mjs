@@ -6,14 +6,15 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 const projectRoot = fileURLToPath(new URL("..", import.meta.url));
+const nativeTarget = `${process.platform}-${process.arch}`;
+const supportedTargets = new Set(["darwin-arm64", "win32-x64", "win32-arm64"]);
 
-test("sidecar build bundles an executable Node runtime and matching Copilot native loader", () => {
+test("sidecar build bundles an executable Node runtime and matching Copilot native loader", { skip: !supportedTargets.has(nativeTarget) }, () => {
   execFileSync(process.execPath, ["scripts/build-sidecar-runtime.js"], {
     cwd: projectRoot,
     stdio: "pipe"
   });
 
-  const nativeTarget = `${process.platform}-${process.arch}`;
   const nodeExecutableName = process.platform === "win32" ? "node.exe" : "node";
   const nodeExecutable = path.join(projectRoot, "src-tauri", "sidecar-node", "runtime", nodeExecutableName);
   const copilotRuntime = path.join(projectRoot, "src-tauri", "sidecar-node", "node_modules", "runtime", `runtime.${nativeTarget}.node`);
