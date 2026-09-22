@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto";
 import fsSync from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
+import { normalizeScanPath } from "../core/utils/paths.js";
 import { supportedAgentSkillDirectories } from "./default-skill-directories.js";
 
 const setupDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -143,15 +143,6 @@ function upsertScannedSkillRoot(db, { sourceType, agentSlug, label, value, remov
       removable = excluded.removable,
       updated_at = excluded.updated_at
   `).run(id, sourceType, agentSlug, label, value, expandedPath, existsOnDisk, Number(removable), now, now);
-}
-
-function normalizeScanPath(value, sourceType) {
-  return sourceType === "browser" ? String(value) : path.resolve(expandHomePath(value));
-}
-
-function expandHomePath(value) {
-  const text = String(value || "");
-  return text.startsWith("~/") ? path.join(os.homedir(), text.slice(2)) : text;
 }
 
 function directoryExists(value) {

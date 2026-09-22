@@ -25,15 +25,15 @@ export const descriptionCandidates = [
   "skill.json"
 ];
 
-export function createServerConfig({ env = process.env, cwd = process.cwd(), homeDir = os.homedir() } = {}) {
+export function createServerConfig({ env = process.env, cwd = process.cwd(), homeDir = os.homedir(), pathApi = path } = {}) {
   const defaultSkillRoot = env.SKILL_ROOT
-    ? resolveProjectPath(env.SKILL_ROOT, { cwd, homeDir })
-    : path.join(homeDir, ".agents", "skills");
+    ? resolveProjectPath(env.SKILL_ROOT, { cwd, homeDir, pathApi })
+    : pathApi.join(homeDir, ".agents", "skills");
   return {
     port: Number(env.PORT || 4173),
     defaultSkillRoot,
     defaultSkillRootDisplayPath: env.SKILL_ROOT ? defaultSkillRoot : "~/.agents/skills/",
-    databasePath: resolveProjectPath(env.SKILL_ANALYSIS_DB || defaultDatabasePath, { cwd, homeDir }),
+    databasePath: resolveProjectPath(env.SKILL_ANALYSIS_DB || defaultDatabasePath, { cwd, homeDir, pathApi }),
     analysisSchemaVersion,
     fallbackModels,
     progressTtlMs,

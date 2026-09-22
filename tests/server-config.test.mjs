@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import path from "node:path";
 import test from "node:test";
 
 import { createServerConfig } from "../server/config.js";
@@ -32,4 +33,16 @@ test("createServerConfig respects explicit environment overrides", () => {
   assert.equal(config.defaultSkillRoot, "/Users/example/custom-skills");
   assert.equal(config.defaultSkillRootDisplayPath, "/Users/example/custom-skills");
   assert.equal(config.databasePath, "/tmp/analysis.sqlite");
+});
+
+test("createServerConfig initializes the default Skill root with Windows path semantics", () => {
+  const config = createServerConfig({
+    env: {},
+    cwd: "C:\\workspace\\app",
+    homeDir: "C:\\Users\\Example",
+    pathApi: path.win32
+  });
+
+  assert.equal(config.defaultSkillRoot, "C:\\Users\\Example\\.agents\\skills");
+  assert.equal(config.databasePath, "C:\\workspace\\app\\data\\analysis.sqlite");
 });

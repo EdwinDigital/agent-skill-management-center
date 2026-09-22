@@ -1,16 +1,16 @@
 import os from "node:os";
 import path from "node:path";
 
-export function expandHomePath(value, homeDir = os.homedir()) {
+export function expandHomePath(value, homeDir = os.homedir(), pathApi = path) {
   const text = String(value || "");
-  return text.startsWith("~/") ? path.join(homeDir, text.slice(2)) : text;
+  return /^~[\\/]/.test(text) ? pathApi.join(homeDir, text.slice(2)) : text;
 }
 
-export function resolveProjectPath(value, { cwd = process.cwd(), homeDir = os.homedir() } = {}) {
-  const expanded = expandHomePath(value, homeDir);
-  return path.isAbsolute(expanded) ? expanded : path.resolve(cwd, expanded);
+export function resolveProjectPath(value, { cwd = process.cwd(), homeDir = os.homedir(), pathApi = path } = {}) {
+  const expanded = expandHomePath(value, homeDir, pathApi);
+  return pathApi.isAbsolute(expanded) ? pathApi.normalize(expanded) : pathApi.resolve(cwd, expanded);
 }
 
 export function normalizeScanPath(value, sourceType, options = {}) {
-  return sourceType === "browser" ? String(value) : path.resolve(expandHomePath(value, options.homeDir));
+  return sourceType === "browser" ? String(value) : resolveProjectPath(value, options);
 }

@@ -3,40 +3,31 @@ import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import fsSync from "node:fs";
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
+import { expandHomePath, normalizeScanPath } from "./core/utils/paths.js";
+import { createServerConfig } from "./server/config.js";
 import { initializeDatabase, seedCurrentDefaultSkillRoot } from "./setup/database.js";
 import { supportedAgentSkillDirectories } from "./setup/default-skill-directories.js";
 
 const app = express();
 const execFileAsync = promisify(execFile);
-const port = Number(process.env.PORT || 4173);
-const defaultSkillRoot = process.env.SKILL_ROOT || path.join(os.homedir(), ".agents", "skills");
-const defaultSkillRootDisplayPath = process.env.SKILL_ROOT ? defaultSkillRoot : "~/.agents/skills/";
-const defaultDatabasePath = "data/analysis.sqlite";
-const databasePath = resolveProjectPath(process.env.SKILL_ANALYSIS_DB || defaultDatabasePath);
-const analysisSchemaVersion = "logic-map-value-insight-sections-v3";
-const fallbackModels = [
-  { id: "github-default", name: "GitHub default", source: "fallback" }
-];
+const {
+  port,
+  defaultSkillRoot,
+  defaultSkillRootDisplayPath,
+  databasePath,
+  analysisSchemaVersion,
+  fallbackModels,
+  progressTtlMs,
+  maxFileBytes,
+  skillManifestFileName,
+  skillIndexMaxDepth,
+  inspectedSkillRootCacheTtlMs,
+  descriptionCandidates
+} = createServerConfig();
 const progressStore = new Map();
-const progressTtlMs = 10 * 60 * 1000;
-const maxFileBytes = 220_000;
-const skillManifestFileName = "SKILL.md";
-const skillIndexMaxDepth = 10;
-const inspectedSkillRootCacheTtlMs = 5 * 60 * 1000;
 const inspectedSkillRootCache = new Map();
-const descriptionCandidates = [
-  "SKILL.md",
-  "skill.md",
-  "README.md",
-  "readme.md",
-  "DESCRIPTION.md",
-  "description.md",
-  "manifest.json",
-  "skill.json"
-];
 const database = initializeDatabase({ databasePath, defaultSkillRoot, defaultSkillRootDisplayPath });
 
 app.use(express.json({ limit: "2mb" }));
@@ -407,8 +398,7 @@ function resolveRequestedRoot(root) {
     return defaultSkillRoot;
   }
 
-  const expanded = root.startsWith("~/") ? path.join(os.homedir(), root.slice(2)) : root;
-  return path.resolve(expanded);
+  return normalizeScanPath(root, "custom");
 }
 
 function normalizeLanguage(language) {
@@ -817,20 +807,6 @@ function upsertScannedSkillRoot(db, { sourceType, agentSlug, label, value, remov
       updated_at = excluded.updated_at
   `).run(id, sourceType, agentSlug, label, value, expandedPath, existsOnDisk, Number(removable), now, now);
   return !before;
-}
-
-function normalizeScanPath(value, sourceType) {
-  return sourceType === "browser" ? String(value) : path.resolve(expandHomePath(value));
-}
-
-function expandHomePath(value) {
-  const text = String(value || "");
-  return text.startsWith("~/") ? path.join(os.homedir(), text.slice(2)) : text;
-}
-
-function resolveProjectPath(value) {
-  const expanded = expandHomePath(value);
-  return path.isAbsolute(expanded) ? expanded : path.resolve(process.cwd(), expanded);
 }
 
 function directoryExists(value) {
