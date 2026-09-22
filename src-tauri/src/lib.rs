@@ -34,7 +34,10 @@ impl Drop for SidecarProcess {
 
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![set_app_zoom, get_desktop_api_endpoint])
+        .invoke_handler(tauri::generate_handler![
+            set_app_zoom,
+            get_desktop_api_endpoint
+        ])
         .setup(|app| {
             if !ensure_not_running_from_dmg(app)? {
                 return Ok(());
@@ -117,13 +120,14 @@ fn show_dmg_installation_warning() {
 
 fn start_sidecar(app: &tauri::App) -> Result<(String, String, Child), Box<dyn std::error::Error>> {
     let sidecar_dir = resolve_sidecar_dir(app)?;
-    let sidecar_path = sidecar_dir.join("agent-smc-sidecar");
+    let node_path = bundled_node_path(&sidecar_dir);
     let app_data_dir = app.path().app_data_dir()?;
     std::fs::create_dir_all(&app_data_dir)?;
 
     let api_token = create_sidecar_token();
     let database_path = app_data_dir.join("analysis.sqlite");
-    let mut child = Command::new(&sidecar_path)
+    let mut child = Command::new(&node_path)
+        .arg("server.js")
         .current_dir(&sidecar_dir)
         .env("HOST", "127.0.0.1")
         .env("PORT", "0")
@@ -134,7 +138,10 @@ fn start_sidecar(app: &tauri::App) -> Result<(String, String, Child), Box<dyn st
         .stderr(Stdio::inherit())
         .spawn()?;
 
-    let stdout = child.stdout.take().ok_or("sidecar stdout was not captured")?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or("sidecar stdout was not captured")?;
     let (ready_sender, ready_receiver) = mpsc::channel::<String>();
     std::thread::spawn(move || {
         let reader = BufReader::new(stdout);
@@ -152,7 +159,9 @@ fn start_sidecar(app: &tauri::App) -> Result<(String, String, Child), Box<dyn st
     let ready_payload = ready_line.trim_start_matches("AGENT_SMC_READY ");
     let ready: serde_json::Value = serde_json::from_str(ready_payload)?;
     let host = ready["host"].as_str().unwrap_or("127.0.0.1");
-    let port = ready["port"].as_u64().ok_or("sidecar did not report a port")?;
+    let port = ready["port"]
+        .as_u64()
+        .ok_or("sidecar did not report a port")?;
     Ok((format!("http://{host}:{port}"), api_token, child))
 }
 
@@ -163,11 +172,26 @@ fn resolve_sidecar_dir(app: &tauri::App) -> Result<std::path::PathBuf, Box<dyn s
     ];
     candidates
         .into_iter()
-        .find(|path| path.join("agent-smc-sidecar").exists())
+        .find(|path| path.join("server.js").exists() && bundled_node_path(path).exists())
         .ok_or_else(|| "Agent SMC sidecar runtime was not found".into())
 }
 
-fn inject_api_endpoint(window: &WebviewWindow, api_base_url: &str, api_token: &str) -> tauri::Result<()> {
+fn bundled_node_path(sidecar_dir: &std::path::Path) -> std::path::PathBuf {
+    #[cfg(target_os = "windows")]
+    {
+        sidecar_dir.join("runtime").join("node.exe")
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        sidecar_dir.join("runtime").join("node")
+    }
+}
+
+fn inject_api_endpoint(
+    window: &WebviewWindow,
+    api_base_url: &str,
+    api_token: &str,
+) -> tauri::Result<()> {
     let script = format!(
         "window.__AGENT_SMC_API_BASE_URL__ = {}; window.__AGENT_SMC_API_TOKEN__ = {};",
         serde_json::to_string(api_base_url).unwrap_or_default(),

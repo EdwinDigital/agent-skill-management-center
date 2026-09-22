@@ -17,12 +17,12 @@ Agent SMC 当前已有 Tauri v2 桌面壳和 Node/Express sidecar，但桌面资
 
 ### 采用：目标 runner 原生组装 Node sidecar
 
-每个 GitHub Actions runner 都使用目标架构的 Node 和 npm optional dependencies。sidecar 构建脚本复制 `process.execPath`、服务端源码、生产依赖和当前平台的 Copilot native runtime 到 Tauri resource 目录。Rust 直接启动随包 Node 可执行文件并传入 `server.js`。
+每个 GitHub Actions runner 都使用目标架构的 npm optional dependencies。sidecar 构建脚本下载固定的 Node.js `24.11.1` 官方发行包，以官方 `SHASUMS256.txt` 校验归档后，复制 Node 可执行文件、许可证、服务端源码、生产依赖和当前平台的 Copilot native runtime 到 Tauri resource 目录。Rust 直接启动随包 Node 可执行文件并传入 `server.js`。
 
 选择该方案的原因：
 
 - 延续现有 Express、SQLite 和 Copilot SDK 架构，改动范围最小。
-- native npm 包和 Node runtime 都在目标架构 runner 上获得，不做不可靠的交叉编译。
+- native npm 包在目标架构 runner 上安装，Node runtime 从对应目标的官方归档获得，不做不可靠的交叉编译。
 - 不引入 `pkg`、`nexe` 或新的二进制封装依赖。
 - Windows 与 macOS 共用一份 sidecar 协议和资源布局。
 
@@ -51,7 +51,7 @@ sidecar-node/
   node_modules/
 ```
 
-`scripts/build-sidecar-runtime.js` 使用当前 runner 的 `process.platform` 和 `process.arch` 得到目标键，例如 `darwin-arm64`、`win32-x64`、`win32-arm64`。脚本只保留该键对应的 native prebuild，并生成 Copilot loader 所需的兼容文件名 `runtime.<platform>-<arch>.node`。
+`scripts/build-sidecar-runtime.js` 使用当前 runner 的 `process.platform` 和 `process.arch` 得到目标键，例如 `darwin-arm64`、`win32-x64`、`win32-arm64`。脚本只保留该键对应的 native prebuild，并生成 Copilot loader 所需的兼容文件名 `runtime.<platform>-<arch>.node`。Node 官方归档按版本和目标缓存在 `node_modules/.cache/agent-smc/`，冷缓存需要访问 `nodejs.org`，缓存命中时不重复下载。
 
 Rust 不再执行 shell launcher。`src-tauri/src/lib.rs` 根据目标系统选择 `runtime/node` 或 `runtime/node.exe`，以 `server.js` 为第一个参数启动进程。进程继续使用：
 

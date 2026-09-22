@@ -29,7 +29,7 @@ test("desktop API endpoint can be recovered after a webview reload", () => {
   assert.match(tauriSource, /struct DesktopApiEndpoint/);
   assert.match(tauriSource, /struct DesktopApiState/);
   assert.match(tauriSource, /fn get_desktop_api_endpoint\(state: tauri::State<'_, DesktopApiState>\)/);
-  assert.match(tauriSource, /tauri::generate_handler!\[set_app_zoom, get_desktop_api_endpoint\]/);
+  assert.match(tauriSource, /tauri::generate_handler!\[\s*set_app_zoom,\s*get_desktop_api_endpoint\s*\]/);
   assert.match(appSource, /readDesktopApiEndpointFromTauri/);
   assert.match(appSource, /invoke<DesktopApiEndpoint>\("get_desktop_api_endpoint"\)/);
 });
@@ -55,9 +55,13 @@ test("server supports desktop sidecar host, random port, token, and readiness ou
   assert.match(serverSource, /AGENT_SMC_READY/);
 });
 
-test("sidecar build preserves Copilot native runtime loader path", () => {
+test("sidecar build targets the current native platform and bundles Node", () => {
   assert.match(sidecarBuildSource, /copyCopilotNativeRuntimeCompat/);
-  assert.match(sidecarBuildSource, /runtime\.darwin-arm64\.node/);
-  assert.match(sidecarBuildSource, /prebuilds.*darwin-arm64.*runtime\.node/s);
-  assert.match(sidecarBuildSource, /platformPart && platformPart !== "darwin-arm64"/);
+  assert.match(sidecarBuildSource, /const nativeTarget = `\$\{process\.platform\}-\$\{process\.arch\}`/);
+  assert.match(sidecarBuildSource, /const nodeRuntimeVersion = "24\.11\.1"/);
+  assert.match(sidecarBuildSource, /https:\/\/nodejs\.org\/dist/);
+  assert.match(sidecarBuildSource, /SHASUMS256\.txt/);
+  assert.doesNotMatch(sidecarBuildSource, /usr\/bin\/env zsh|opt\/homebrew/);
+  assert.match(tauriSource, /runtime.*node\.exe/si);
+  assert.match(tauriSource, /\.arg\("server\.js"\)/);
 });
