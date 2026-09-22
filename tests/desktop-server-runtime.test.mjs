@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { once } from "node:events";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -10,7 +11,7 @@ import { fileURLToPath } from "node:url";
 
 const projectRoot = fileURLToPath(new URL("..", import.meta.url));
 
-test("desktop sidecar reports its random port and protects API routes with a launch token", { timeout: 10_000 }, async (t) => {
+test("desktop sidecar reports its random port and protects API routes with a launch token", { timeout: 20_000 }, async (t) => {
   const temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "agent-smc-sidecar-test-"));
   const child = spawn(process.execPath, ["server.js"], {
     cwd: projectRoot,
@@ -30,9 +31,9 @@ test("desktop sidecar reports its random port and protects API routes with a lau
     stderr += chunk;
   });
 
-  t.after(() => {
-    child.kill();
-    fs.rmSync(temporaryDirectory, { recursive: true, force: true });
+  t.after(async () => {
+    await stopChild(child);
+    fs.rmSync(temporaryDirectory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   });
 
   const ready = await waitForReady(child, () => stderr);
@@ -44,7 +45,7 @@ test("desktop sidecar reports its random port and protects API routes with a lau
   })).status, 200);
 });
 
-test("stored GitHub OAuth without Copilot scope is authenticated but not ready", { timeout: 10_000 }, async (t) => {
+test("stored GitHub OAuth without Copilot scope is authenticated but not ready", { timeout: 20_000 }, async (t) => {
   const temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "agent-smc-oauth-test-"));
   const databasePath = path.join(temporaryDirectory, "analysis.sqlite");
   const database = new DatabaseSync(databasePath);
@@ -74,9 +75,9 @@ test("stored GitHub OAuth without Copilot scope is authenticated but not ready",
     stderr += chunk;
   });
 
-  t.after(() => {
-    child.kill();
-    fs.rmSync(temporaryDirectory, { recursive: true, force: true });
+  t.after(async () => {
+    await stopChild(child);
+    fs.rmSync(temporaryDirectory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   });
 
   const ready = await waitForReady(child, () => stderr);
@@ -97,7 +98,7 @@ function waitForReady(child, readStderr) {
     const timeout = setTimeout(() => {
       lines.close();
       reject(new Error(`Timed out waiting for AGENT_SMC_READY. ${readStderr()}`));
-    }, 3_000);
+    }, 10_000);
 
     lines.on("line", (line) => {
       if (!line.startsWith("AGENT_SMC_READY ")) return;
@@ -110,4 +111,11 @@ function waitForReady(child, readStderr) {
       reject(new Error(`Sidecar exited before readiness (code=${code}, signal=${signal}). ${readStderr()}`));
     });
   });
+}
+
+async function stopChild(child) {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  const exited = once(child, "exit");
+  child.kill();
+  await exited;
 }

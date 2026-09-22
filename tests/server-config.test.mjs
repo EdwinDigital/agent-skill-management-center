@@ -8,7 +8,8 @@ test("createServerConfig resolves web defaults from the project directory", () =
   const config = createServerConfig({
     env: {},
     cwd: "/workspace/app",
-    homeDir: "/Users/example"
+    homeDir: "/Users/example",
+    pathApi: path.posix
   });
 
   assert.equal(config.port, 4173);
@@ -26,7 +27,8 @@ test("createServerConfig respects explicit environment overrides", () => {
       SKILL_ANALYSIS_DB: "/tmp/analysis.sqlite"
     },
     cwd: "/workspace/app",
-    homeDir: "/Users/example"
+    homeDir: "/Users/example",
+    pathApi: path.posix
   });
 
   assert.equal(config.port, 5123);
