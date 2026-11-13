@@ -273,6 +273,10 @@ type PendingDirectory = {
   skillCount?: number;
 };
 
+type DirectoryPickerResponse =
+  | { cancelled: true }
+  | { cancelled?: false; directory: PendingDirectory };
+
 const defaultSkillPageSize = 10;
 const minSkillPageSize = 1;
 const maxSkillPageSize = 18;
@@ -417,6 +421,10 @@ const copy = {
     folders: "folders",
     directoryConfirmEyebrow: "Local Skill root",
     directoryConfirmTitle: "Add path",
+    directoryPathLabel: "Skill root path",
+    directoryPathPlaceholder: "Enter a local path, for example C:\\Skills",
+    directoryPathHint: "Enter a path or use the system picker. The directory must contain SKILL.md files before it can be saved.",
+    browseDirectory: "Browse folders",
     directoryNameLabel: "Directory display name",
     directoryNoSkills: "No Skill definition file (SKILL.md) was found in the selected directory.",
     cancel: "Cancel",
@@ -560,6 +568,10 @@ const copy = {
     folders: "个文件夹",
     directoryConfirmEyebrow: "本地 Skill 根目录",
     directoryConfirmTitle: "添加路径",
+    directoryPathLabel: "Skill 根目录路径",
+    directoryPathPlaceholder: "输入本机目录，例如 C:\\Skills",
+    directoryPathHint: "可直接输入路径，也可使用系统选择器。保存前会校验目录中是否包含 SKILL.md。",
+    browseDirectory: "浏览文件夹",
     directoryNameLabel: "目录显示名称",
     directoryNoSkills: "当前目录没有找到 Skill 定义文件（SKILL.md）。",
     cancel: "取消",
@@ -620,6 +632,7 @@ function App() {
   const [skillTranslation, setSkillTranslation] = useState<SkillTranslation | null>(null);
   const [translatingSkillDoc, setTranslatingSkillDoc] = useState(false);
   const [pendingDirectory, setPendingDirectory] = useState<PendingDirectory | null>(null);
+  const [directoryPath, setDirectoryPath] = useState("");
   const [directoryName, setDirectoryName] = useState("");
   const [savingDirectory, setSavingDirectory] = useState(false);
   const mapRequestRef = useRef(0);
@@ -1032,23 +1045,35 @@ function App() {
     }
   }
 
+  function openDirectoryDialog() {
+    setDirectoryPath("");
+    setDirectoryName("");
+    setPendingDirectory({ path: "", message: text.directoryPathHint });
+  }
+
   async function pickLocalDirectory() {
     setLoadingRoot(true);
     setPathHint(text.openingDirectoryPicker);
     try {
-      const result = await fetchJson<{ directory: PendingDirectory }>("/api/skill-roots/pick-local", {
+      const result = await fetchJson<DirectoryPickerResponse>("/api/skill-roots/pick-local", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ language })
+        body: JSON.stringify({ language, root: selectedRoot?.value })
       });
+      if (result.cancelled) {
+        setPathHint(selectedRoot ? text.loadedServer : text.defaultPath);
+        return;
+      }
       if ((result.directory.skillCount || 0) === 0) {
         toast.error(text.directoryNoSkills);
-        setPendingDirectory(null);
+        setPendingDirectory(result.directory);
+        setDirectoryPath(result.directory.path);
         setDirectoryName("");
         setPathHint(selectedRoot ? text.loadedServer : text.defaultPath);
         return;
       }
       setPendingDirectory(result.directory);
+      setDirectoryPath(result.directory.path);
       setDirectoryName(result.directory.suggestedLabel || "");
     } catch (error) {
       notifyError(error);
@@ -1059,20 +1084,21 @@ function App() {
   }
 
   async function savePendingDirectory() {
-    if (!pendingDirectory) {
+    if (!pendingDirectory || !directoryPath.trim()) {
       return;
     }
     setSavingDirectory(true);
     try {
-      const label = directoryName.trim() || pendingDirectory.suggestedLabel || "Custom";
+      const label = directoryName.trim() || undefined;
       const result = await fetchJson<{ root: SkillRoot; roots: SkillRoot[] }>("/api/skill-roots/custom", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "server", label, value: pendingDirectory.path, language })
+        body: JSON.stringify({ type: "server", label, value: directoryPath.trim(), language })
       });
       setPendingDirectory(null);
+      setDirectoryPath("");
       applyRoots(result.roots || [], result.root?.id || "");
-      toast.success(`${text.directorySaved}: ${label}`);
+      toast.success(`${text.directorySaved}: ${result.root?.label || label || "Custom"}`);
       await loadSkillsFromServer(result.root);
     } catch (error) {
       notifyError(error);
@@ -1514,7 +1540,7 @@ function App() {
                         </SelectContent>
                       </Select>
                       <div className="grid grid-cols-2 gap-2">
-                        <Button variant="outline" size="sm" onClick={pickLocalDirectory} disabled={loadingRoot} className="min-w-0 bg-card/70">
+                        <Button variant="outline" size="sm" onClick={openDirectoryDialog} disabled={loadingRoot} className="min-w-0 bg-card/70">
                           <FolderOpen data-icon="inline-start" />
                           {text.chooseDirectory}
                         </Button>
@@ -1966,25 +1992,34 @@ function App() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={Boolean(pendingDirectory)} onOpenChange={(open) => !open && setPendingDirectory(null)}>
+      <Dialog open={Boolean(pendingDirectory)} onOpenChange={(open) => !open && !loadingRoot && !savingDirectory && setPendingDirectory(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{text.directoryConfirmTitle}</DialogTitle>
             <DialogDescription>{text.directoryConfirmEyebrow}</DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
+              <label htmlFor="skill-directory-path" className="text-sm font-medium">{text.directoryPathLabel}</label>
+              <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                <Input id="skill-directory-path" value={directoryPath} onChange={(event) => setDirectoryPath(event.target.value)} placeholder={text.directoryPathPlaceholder} autoFocus disabled={loadingRoot || savingDirectory} />
+                <Button variant="outline" onClick={pickLocalDirectory} disabled={loadingRoot || savingDirectory}>
+                  <FolderOpen data-icon="inline-start" />
+                  {text.browseDirectory}
+                </Button>
+              </div>
+            </div>
             <div className="rounded-lg border bg-muted/30 p-3">
-              <p className="break-all font-mono text-xs text-muted-foreground">{pendingDirectory?.path}</p>
-              <p className="mt-2 text-sm font-medium">{pendingDirectory?.message}</p>
+              <p className="text-sm text-muted-foreground">{pendingDirectory?.path === directoryPath ? pendingDirectory?.message : text.directoryPathHint}</p>
             </div>
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium">{text.directoryNameLabel}</label>
-              <Input value={directoryName} onChange={(event) => setDirectoryName(event.target.value)} autoFocus />
+              <label htmlFor="skill-directory-name" className="text-sm font-medium">{text.directoryNameLabel}</label>
+              <Input id="skill-directory-name" value={directoryName} onChange={(event) => setDirectoryName(event.target.value)} disabled={loadingRoot || savingDirectory} />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setPendingDirectory(null)}>{text.cancel}</Button>
-            <Button onClick={savePendingDirectory} disabled={savingDirectory}>{text.saveDirectory}</Button>
+            <Button variant="outline" onClick={() => setPendingDirectory(null)} disabled={loadingRoot || savingDirectory}>{text.cancel}</Button>
+            <Button onClick={savePendingDirectory} disabled={savingDirectory || loadingRoot || !directoryPath.trim()}>{text.saveDirectory}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

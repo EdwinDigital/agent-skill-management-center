@@ -4,8 +4,15 @@ All notable changes to Agent Skill Management Center are documented here. The fo
 
 ## [Unreleased]
 
+### Fixed
+
+- Added the Windows native folder picker for custom Skill roots, preserving Unicode paths and keeping macOS AppleScript selection.
+- Treat folder-picker cancellation as a normal result without displaying an error or modifying saved roots.
+- Added direct path entry so directory management remains available when a system picker is blocked or unavailable, with concise timeout messages.
+
 ### Build
 
+- Added a manual Windows ARM64 installer workflow with architecture checks and commit-specific artifacts, without creating or changing a Release.
 - Migrated macOS CI and release jobs to the supported macOS 15 ARM64 runner.
 - Added manual rebuilding of an existing unpublished tag without moving its source commit, with opt-in publication after all platform checks pass.
 

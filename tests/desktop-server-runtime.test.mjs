@@ -7,7 +7,7 @@ import path from "node:path";
 import readline from "node:readline";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const projectRoot = fileURLToPath(new URL("..", import.meta.url));
 
@@ -17,7 +17,14 @@ test("desktop sidecar reports its random port and protects API routes with a lau
   const skillDirectory = path.join(skillRoot, "desktop-cors-regression");
   fs.mkdirSync(skillDirectory, { recursive: true });
   fs.writeFileSync(path.join(skillDirectory, "SKILL.md"), "---\nname: desktop-cors-regression\ndescription: Verify desktop scanning.\n---\n# Desktop CORS regression\n");
-  const child = spawn(process.execPath, ["server.js"], {
+  const emptyDirectory = path.join(temporaryDirectory, "empty-directory");
+  fs.mkdirSync(emptyDirectory);
+  const pickerProvider = path.join(temporaryDirectory, "picker-provider.mjs");
+  const pickerHook = path.join(temporaryDirectory, "picker-hook.mjs");
+  // 用固定选择结果替代系统弹窗，验证真实 HTTP/数据库流程且不阻塞 CI。
+  fs.writeFileSync(pickerProvider, `const results = ${JSON.stringify([null, emptyDirectory, skillRoot])};\nexport async function pickLocalSkillRoot() { return results.shift() ?? null; }\n`);
+  fs.writeFileSync(pickerHook, `import { registerHooks } from "node:module";\nregisterHooks({ resolve(specifier, context, nextResolve) {\n  if (specifier === "./server/folder-picker.js") return { url: ${JSON.stringify(pathToFileURL(pickerProvider).href)}, shortCircuit: true };\n  return nextResolve(specifier, context);\n} });\n`);
+  const child = spawn(process.execPath, ["--import", pathToFileURL(pickerHook).href, "server.js"], {
     cwd: projectRoot,
     env: {
       ...process.env,
@@ -130,6 +137,42 @@ test("desktop sidecar reports its random port and protects API routes with a lau
       assert.equal((await detail.json()).skill.name, "desktop-cors-regression");
     });
   }
+
+  await t.test("folder picker API cancels silently, previews directories, and saves only after confirmation", async () => {
+    const headers = { "X-Agent-SMC-Token": "test-token", "Content-Type": "application/json" };
+    const rootsBefore = await (await fetch(`${baseUrl}/api/skill-roots`, { headers })).json();
+    const pick = () => fetch(`${baseUrl}/api/skill-roots/pick-local`, { method: "POST", headers, body: JSON.stringify({ root: skillRoot, language: "zh" }) });
+
+    const cancelled = await pick();
+    assert.equal(cancelled.status, 200);
+    assert.deepEqual(await cancelled.json(), { cancelled: true });
+
+    const empty = await pick();
+    assert.equal(empty.status, 200);
+    const emptyPreview = await empty.json();
+    assert.equal(emptyPreview.directory.path, emptyDirectory);
+    assert.equal(emptyPreview.directory.skillCount, 0);
+
+    const selected = await pick();
+    assert.equal(selected.status, 200);
+    const preview = await selected.json();
+    assert.equal(preview.directory.path, skillRoot);
+    assert.equal(preview.directory.skillCount, 1);
+    assert.deepEqual(await (await fetch(`${baseUrl}/api/skill-roots`, { headers })).json(), rootsBefore);
+
+    const saved = await fetch(`${baseUrl}/api/skill-roots/custom`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ value: preview.directory.path, label: "Picker API root", language: "zh" })
+    });
+    assert.equal(saved.status, 200);
+    const result = await saved.json();
+    assert.equal(result.root.label, "Picker API root");
+    assert.equal(result.root.expandedPath, skillRoot);
+    assert.ok(result.roots.some((root) => root.id === result.root.id));
+    const logs = await (await fetch(`${baseUrl}/api/error-logs`, { headers })).json();
+    assert.deepEqual(logs.logs, []);
+  });
 });
 
 test("stored GitHub OAuth without Copilot scope is authenticated but not ready", { timeout: 20_000 }, async (t) => {

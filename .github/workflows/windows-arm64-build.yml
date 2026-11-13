@@ -1,0 +1,102 @@
+name: Windows ARM64 Build
+run-name: Windows ARM64 build (${{ github.ref_name }})
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-arm64-build-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Windows ARM64 installer
+    runs-on: windows-11-arm
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.11.1"
+          architecture: arm64
+          cache: npm
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Run Node tests
+        run: npm test
+
+      - name: Run source checks
+        run: npm run check
+
+      - name: Install Rust target
+        shell: bash
+        run: |
+          rustup update stable --no-self-update
+          rustup default stable
+          rustup target add aarch64-pc-windows-msvc
+
+      - name: Build Windows ARM64 installer
+        run: npm run desktop:build -- --target aarch64-pc-windows-msvc --bundles nsis
+
+      - name: Verify architecture and collect installer
+        shell: pwsh
+        env:
+          SOURCE_COMMIT: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $target = 'aarch64-pc-windows-msvc'
+          $releaseDir = Join-Path 'src-tauri/target' "$target/release"
+          $binaries = @(
+            (Join-Path $releaseDir 'agent-skills-management-center.exe'),
+            'src-tauri/sidecar-node/runtime/node.exe',
+            'src-tauri/sidecar-node/node_modules/runtime/runtime.win32-arm64.node'
+          )
+          foreach ($binary in $binaries) {
+            $bytes = [IO.File]::ReadAllBytes((Resolve-Path -LiteralPath $binary).Path)
+            $peOffset = [BitConverter]::ToInt32($bytes, 0x3c)
+            if ([BitConverter]::ToUInt32($bytes, $peOffset) -ne 0x00004550 -or [BitConverter]::ToUInt16($bytes, $peOffset + 4) -ne 0xaa64) {
+              throw "Expected an ARM64 PE binary: $binary"
+            }
+          }
+          $runtimeTarget = & 'src-tauri/sidecar-node/runtime/node.exe' -p 'process.platform + "-" + process.arch'
+          if ($LASTEXITCODE -ne 0 -or $runtimeTarget -ne 'win32-arm64') {
+            throw "Unexpected bundled Node target: $runtimeTarget"
+          }
+
+          $installers = @(Get-ChildItem -LiteralPath (Join-Path $releaseDir 'bundle/nsis') -Filter '*.exe' -File)
+          if ($installers.Count -ne 1) { throw "Expected one installer, found $($installers.Count)" }
+          $version = (Get-Content -LiteralPath 'package.json' -Raw | ConvertFrom-Json).version
+          $shortCommit = $env:SOURCE_COMMIT.Substring(0, 7)
+          $assetName = "Agent-SMC-$version-windows-arm64-$shortCommit-setup.exe"
+          New-Item -ItemType Directory -Path 'build-artifacts' -Force | Out-Null
+          $assetPath = Join-Path 'build-artifacts' $assetName
+          Copy-Item -LiteralPath $installers[0].FullName -Destination $assetPath
+          $hash = (Get-FileHash -LiteralPath $assetPath -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $assetName" | Set-Content -LiteralPath 'build-artifacts/SHA256SUMS.txt' -Encoding utf8
+          @{
+            version = $version
+            commit = $env:SOURCE_COMMIT
+            target = $target
+            installer = $assetName
+            sha256 = $hash
+            runUrl = $env:RUN_URL
+          } | ConvertTo-Json | Set-Content -LiteralPath 'build-artifacts/build-info.json' -Encoding utf8
+          "Installer: $assetName`n`nCommit: $env:SOURCE_COMMIT`n`nSHA-256: $hash`n`nBuild artifact only; no Release was created or changed." | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY
+
+      - name: Upload Windows ARM64 installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-arm64-installer-${{ github.sha }}
+          path: build-artifacts/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7

@@ -52,6 +52,18 @@ gh workflow run desktop-release.yml --ref main -f release_tag=v1.0.1 -f publish=
 
 All three installers are rebuilt from the same immutable tag commit. Publishing still requires every build, signature check, asset check, and draft-target validation to pass. Omit `publish=true` to keep the result as a draft. Existing public releases cannot be overwritten.
 
+## Build Windows ARM64 Without A Release
+
+To build the selected branch without creating a tag or modifying any Release:
+
+```bash
+gh workflow run windows-arm64-build.yml --ref main
+```
+
+The read-only workflow runs tests and source checks, then builds an NSIS installer on the native Windows ARM64 runner. It verifies the architecture of the desktop executable, bundled Node, and Copilot runtime. Download the installer, `SHA256SUMS.txt`, and `build-info.json` from the run's Actions artifact, retained for seven days.
+
+Installer names include the source commit, for example `Agent-SMC-1.0.1-windows-arm64-abcdef0-setup.exe`. These are test builds of the current source, not a new stable release; the application version remains unchanged.
+
 ## CI
 
 `.github/workflows/ci.yml` runs on pull requests and pushes to `main`:

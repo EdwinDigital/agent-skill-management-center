@@ -12,7 +12,7 @@ The Express API is available at `http://localhost:4173` by default. Vite develop
 | `GET /api/progress/:requestId` | Progress for AI evaluation or translation. |
 | `GET /api/skill-roots` | Scanned and custom Skill roots. |
 | `POST /api/skill-roots/scan` | Scan known global Skill path conventions and refresh indexes. |
-| `POST /api/skill-roots/pick-local` | Open the macOS native folder picker and inspect the selected directory. |
+| `POST /api/skill-roots/pick-local` | Open the Windows/macOS native folder picker and inspect the selected directory. Cancellation returns `{ "cancelled": true }` without saving a root. |
 | `POST /api/skill-roots/custom` | Validate and save a custom filesystem or browser root. |
 | `DELETE /api/skill-roots/:id` | Remove a removable custom root. |
 | `GET /api/skills` | List indexed Skills under the selected root. |

@@ -67,7 +67,7 @@ PORT=5173 npm stop
 
 ## 原生目录选择器
 
-当前原生选择器使用 macOS `osascript`。Windows 用户可以通过全局扫描发现默认根目录，并手工添加自定义路径。
+“添加路径”先打开应用内表单，可直接粘贴本机 Skill 根目录。保存时会校验目录及其中的 SKILL.md，验证通过后才更新目录列表。系统选择器为可选方式：Windows 使用系统自带的 Windows PowerShell STA 宿主和 Windows Forms，macOS 继续使用 `osascript`，不额外安装应用依赖。取消选择会保留当前目录且不报错。若系统弹窗不可用或超时，直接输入目录路径即可，无需修改 Copilot 认证。
 
 ## 报告问题
 

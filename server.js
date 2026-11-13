@@ -7,6 +7,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { expandHomePath, normalizeScanPath } from "./core/utils/paths.js";
 import { createServerConfig } from "./server/config.js";
+import { pickLocalSkillRoot } from "./server/folder-picker.js";
 import { initializeDatabase, seedCurrentDefaultSkillRoot } from "./setup/database.js";
 import { supportedAgentSkillDirectories } from "./setup/default-skill-directories.js";
 
@@ -113,7 +114,11 @@ app.post("/api/skill-roots/scan", (_request, response) => {
 
 app.post("/api/skill-roots/pick-local", async (request, response) => {
   try {
-    const root = await pickLocalSkillRoot();
+    const root = await pickLocalSkillRoot({ initialDirectory: resolveRequestedRoot(request.body?.root), language: request.body?.language });
+    if (!root) {
+      response.json({ cancelled: true });
+      return;
+    }
     const inspection = await inspectSkillRoot(root, normalizeLanguage(request.body?.language));
     response.json({ directory: inspection });
   } catch (error) {
@@ -776,27 +781,6 @@ function addCustomSkillRoot({ label, value, type = "server", language = "en" }) 
     refreshSkillIndex(expandedPath, scannedSkills);
   }
   return listScannedSkillRoots().find((item) => item.expandedPath === expandedPath);
-}
-
-async function pickLocalSkillRoot() {
-  if (process.platform !== "darwin") {
-    throw new Error("Native folder picker is currently supported on macOS. Enter a server path or use Scan for known Skill roots.");
-  }
-
-  const script = 'POSIX path of (choose folder with prompt "Choose a Skill directory")';
-  try {
-    const { stdout } = await execFileAsync("osascript", ["-e", script], { timeout: 120_000 });
-    const selectedPath = stdout.trim();
-    if (!selectedPath) {
-      throw new Error("No directory was selected.");
-    }
-    return path.resolve(selectedPath);
-  } catch (error) {
-    if (error.signal === "SIGTERM" || /User canceled|cancelled|canceled|用户已取消|\(-128\)/i.test(error.message)) {
-      throw new Error("用户已取消");
-    }
-    throw error;
-  }
 }
 
 async function inspectSkillRoot(root, language = "en") {

@@ -4,6 +4,7 @@ import test from "node:test";
 
 const ci = readOptionalWorkflow("ci.yml");
 const release = readOptionalWorkflow("desktop-release.yml");
+const windowsArm64Build = readOptionalWorkflow("windows-arm64-build.yml");
 const yaml = await import("yaml").catch(() => null);
 
 test("CI runs read-only quality gates on main, pull requests, macOS, and Windows", () => {
@@ -98,6 +99,33 @@ test("manual release rebuilds pin the original tag commit and publish only when 
   assert.match(validate.run, /Release source does not match tag/);
   const publish = config.jobs.publish.steps.find((step) => step.name === "Publish release");
   assert.equal(publish.if, "github.event_name == 'push' || inputs.publish");
+});
+
+test("manual Windows ARM64 builds upload commit-specific artifacts without publishing a Release", () => {
+  assert.ok(yaml, "the yaml parser must be installed for structured workflow validation");
+  assert.ok(windowsArm64Build, "windows-arm64-build.yml must exist");
+  const config = yaml.parse(windowsArm64Build);
+  assert.deepEqual(Object.keys(config.on), ["workflow_dispatch"]);
+  assert.deepEqual(config.permissions, { contents: "read" });
+  assert.deepEqual(Object.keys(config.jobs), ["build"]);
+  assert.equal(config.concurrency["cancel-in-progress"], false);
+
+  const job = config.jobs.build;
+  assert.equal(job["runs-on"], "windows-11-arm");
+  assert.equal(job.steps.find((step) => step.uses === "actions/checkout@v4").with.ref, "${{ github.sha }}");
+  assert.equal(job.steps.find((step) => step.uses === "actions/setup-node@v4").with.architecture, "arm64");
+  const commands = job.steps.map((step) => step.run || "").join("\n");
+  assert.match(commands, /npm test/);
+  assert.match(commands, /npm run check/);
+  assert.match(commands, /npm run desktop:build -- --target aarch64-pc-windows-msvc --bundles nsis/);
+  assert.match(commands, /ToUInt16\(\$bytes, \$peOffset \+ 4\) -ne 0xaa64/);
+  assert.match(commands, /win32-arm64/);
+  assert.match(commands, /SOURCE_COMMIT\.Substring\(0, 7\)/);
+  assert.match(commands, /SHA256SUMS\.txt/);
+  const upload = job.steps.find((step) => step.uses === "actions/upload-artifact@v4");
+  assert.match(upload.with.name, /github\.sha/);
+  assert.equal(upload.with["if-no-files-found"], "error");
+  assert.doesNotMatch(windowsArm64Build, /contents: write|gh release|git tag|git push|secrets\./);
 });
 
 function readOptionalWorkflow(fileName) {

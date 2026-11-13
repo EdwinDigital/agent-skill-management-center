@@ -67,7 +67,7 @@ PORT=5173 npm stop
 
 ## Native Folder Picker
 
-The current native picker uses macOS `osascript`. Windows users can discover default roots through Global scan and add custom paths manually.
+Add path opens an in-app form where you can paste a local Skill root directly. Save validates the directory and its SKILL.md files before changing the root list. System folder selection is optional: Windows uses the built-in Windows PowerShell STA host and Windows Forms; macOS keeps using `osascript`. No additional application dependency is required. Cancelling leaves the selected root unchanged and does not display an error. If a system dialog is unavailable or times out, enter the path manually rather than changing Copilot authentication.
 
 ## Reporting Problems
 

@@ -12,7 +12,7 @@ Express API 默认位于 `http://localhost:4173`。Vite 开发服务器将 `/api
 | `GET /api/progress/:requestId` | AI 评估或翻译进度。 |
 | `GET /api/skill-roots` | 已扫描和自定义 Skill 根目录。 |
 | `POST /api/skill-roots/scan` | 扫描已知全局 Skill 路径约定并刷新索引。 |
-| `POST /api/skill-roots/pick-local` | 打开 macOS 原生目录选择器并检查目录。 |
+| `POST /api/skill-roots/pick-local` | 打开 Windows/macOS 原生目录选择器并检查目录。取消时返回 `{ "cancelled": true }`，不保存目录。 |
 | `POST /api/skill-roots/custom` | 校验并保存自定义文件系统或浏览器根目录。 |
 | `DELETE /api/skill-roots/:id` | 删除可移除的自定义根目录。 |
 | `GET /api/skills` | 列出选中根目录下已索引的 Skills。 |

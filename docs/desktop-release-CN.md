@@ -52,6 +52,18 @@ gh workflow run desktop-release.yml --ref main -f release_tag=v1.0.1 -f publish=
 
 三个安装包均从同一个固定 Tag commit 重新构建。只有全部构建、签名检查、资产检查和草稿目标校验通过后才发布。省略 `publish=true` 则保留草稿，已有公开 Release 不允许覆盖。
 
+## 仅构建 Windows ARM64，不发布 Release
+
+构建指定分支，不创建 Tag，也不修改任何 Release：
+
+```bash
+gh workflow run windows-arm64-build.yml --ref main
+```
+
+此只读工作流先执行测试和源码检查，再在原生 Windows ARM64 runner 上构建 NSIS 安装包，并校验桌面程序、内置 Node 和 Copilot runtime 的架构。构建完成后，可从该次运行的 Actions artifact 下载安装包、`SHA256SUMS.txt` 和 `build-info.json`，产物保留七天。
+
+安装包文件名包含源码提交号，例如 `Agent-SMC-1.0.1-windows-arm64-abcdef0-setup.exe`。这类安装包是当前源码的测试构建，不代表新的稳定版，应用版本号保持不变。
+
 ## CI
 
 Pull Request 和 `main` 推送会触发 `.github/workflows/ci.yml`：
