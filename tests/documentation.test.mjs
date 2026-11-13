@@ -82,7 +82,7 @@ test("README header uses the application icon and private-repository-safe badges
   for (const relativePath of ["README.md", "README-CN.md"]) {
     const content = readText(relativePath);
     assert.match(content, /<img src="docs\/images\/app-icon\.png" width="96"/);
-    assert.match(content, /img\.shields\.io\/badge\/release-v1\.0\.0/);
+    assert.match(content, /img\.shields\.io\/badge\/release-v1\.0\.1/);
     assert.match(content, /img\.shields\.io\/badge\/CI-macOS%20ARM64%20%7C%20Windows%20passing-16a34a/);
     assert.doesNotMatch(content, /img\.shields\.io\/github\/v\/release/);
     assert.doesNotMatch(content, /actions\/workflows\/ci\.yml\/badge\.svg/);
@@ -93,14 +93,14 @@ test("README files stay concise and expose release, docs, and community entry po
   for (const relativePath of ["README.md", "README-CN.md"]) {
     const content = readText(relativePath);
     assert.ok(content.split(/\r?\n/).length <= 180, `${relativePath} should remain concise`);
-    assert.match(content, /releases\/tag\/v1\.0\.0/);
+    assert.match(content, /releases\/tag\/v1\.0\.1/);
     assert.match(content, /docs\/README\.md/);
     assert.match(content, /CONTRIBUTING\.md/);
     assert.match(content, /SECURITY\.md/);
     assert.match(content, /LICENSE/);
-    assert.match(content, /Agent-SMC-1\.0\.0-macos-arm64\.dmg/);
-    assert.match(content, /Agent-SMC-1\.0\.0-windows-x64-setup\.exe/);
-    assert.match(content, /Agent-SMC-1\.0\.0-windows-arm64-setup\.exe/);
+    assert.match(content, /Agent-SMC-1\.0\.1-macos-arm64\.dmg/);
+    assert.match(content, /Agent-SMC-1\.0\.1-windows-x64-setup\.exe/);
+    assert.match(content, /Agent-SMC-1\.0\.1-windows-arm64-setup\.exe/);
     assert.match(content, /SHA256SUMS\.txt/);
   }
 });
@@ -113,16 +113,16 @@ test("version and package metadata describe the published MIT release", () => {
   const cargoToml = readText("src-tauri/Cargo.toml");
   const versionDoc = readText("VERSION.md");
 
-  assert.equal(packageJson.version, "1.0.0");
+  assert.equal(packageJson.version, "1.0.1");
   assert.equal(packageJson.license, "MIT");
   assert.equal(packageJson.repository.url, "https://github.com/EdwinDigital/agent-skill-management-center.git");
   assert.equal(packageJson.bugs.url, "https://github.com/EdwinDigital/agent-skill-management-center/issues");
   assert.equal(lockRoot.name, packageJson.name);
   assert.equal(lockRoot.version, packageJson.version);
   assert.equal(lockRoot.license, packageJson.license);
-  assert.equal(tauriConfig.version, "1.0.0");
-  assert.match(cargoToml, /^version = "1\.0\.0"/m);
-  assert.match(versionDoc, /Version 1\.0\.0/);
+  assert.equal(tauriConfig.version, "1.0.1");
+  assert.match(cargoToml, /^version = "1\.0\.1"/m);
+  assert.match(versionDoc, /Version 1\.0\.1/);
   assert.doesNotMatch(versionDoc, /1\.1\.2/);
 });
 

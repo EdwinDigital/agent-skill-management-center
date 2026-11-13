@@ -2,13 +2,15 @@
 
 ## Current Version
 
-**Agent Skill Management Center Version 1.0.0**
+**Agent Skill Management Center Version 1.0.1**
 
-Package version: `1.0.0`
+Package version: `1.0.1`
 
-## Version 1.0.0 Scope
+## Version 1.0.1 Scope
 
-Version 1.0.0 defines the first stable local-first release of Agent Skill Management Center. It includes:
+Version 1.0.1 is a non-breaking patch release that fixes Windows desktop API connectivity and background-process console windows while preserving macOS behavior.
+
+The Version 1.0 feature set includes:
 
 - Local Skill root discovery, custom root management, search, selection, and pagination.
 - Immediate rule-based Skill analysis with summary, triggers, tools, run methods, file stats, graph nodes, and evidence.

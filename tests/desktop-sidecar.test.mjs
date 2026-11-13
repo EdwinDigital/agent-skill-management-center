@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
+import { runInNewContext } from "node:vm";
 
 const packageJson = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8"));
 const tauriConfig = JSON.parse(fs.readFileSync(new URL("../src-tauri/tauri.conf.json", import.meta.url), "utf8"));
@@ -23,6 +24,37 @@ test("Rust app starts the sidecar and injects the API endpoint into the webview"
   assert.match(tauriSource, /start_sidecar/);
   assert.match(tauriSource, /__AGENT_SMC_API_BASE_URL__/);
   assert.match(tauriSource, /AGENT_SMC_READY/);
+});
+
+test("Windows sidecar disables console creation before spawning while preserving readiness output", () => {
+  const startSidecarSource = tauriSource.slice(tauriSource.indexOf("fn start_sidecar("), tauriSource.indexOf("fn resolve_sidecar_dir("));
+  assert.match(startSidecarSource, /let mut command = Command::new\(&node_path\);/);
+  assert.match(startSidecarSource, /#\[cfg\(target_os = "windows"\)\]\s*\{\s*use std::os::windows::process::CommandExt;/);
+  assert.match(startSidecarSource, /const CREATE_NO_WINDOW: u32 = 0x0800_0000;/);
+  assert.match(startSidecarSource, /command\.creation_flags\(CREATE_NO_WINDOW\);\s*\}/);
+  assert.match(startSidecarSource, /\.stdout\(Stdio::piped\(\)\)/);
+  assert.match(startSidecarSource, /let mut child = command\.spawn\(\)\?;/);
+  assert.ok(startSidecarSource.indexOf("command.creation_flags(CREATE_NO_WINDOW)") < startSidecarSource.indexOf("command.spawn()"));
+  assert.match(startSidecarSource, /AGENT_SMC_READY/);
+});
+
+test("Windows-only Rust process APIs are excluded from macOS and other targets", () => {
+  const portableSource = tauriSource.replace(/#\[cfg\(target_os = "windows"\)\]\s*\{[^{}]*\}/g, "");
+  assert.doesNotMatch(portableSource, /std::os::windows|CREATE_NO_WINDOW|\.creation_flags\(/);
+});
+
+test("GitHub CLI background commands hide consoles only on Windows", () => {
+  const commands = [...serverSource.matchAll(/execFileAsync\("gh", [^\r\n]+/g)];
+  assert.ok(commands.length > 0);
+  for (const [command] of commands) {
+    const optionsSource = command.match(/(\{[^{}]*\})\);$/)?.[1];
+    assert.ok(optionsSource, command);
+    for (const platform of ["win32", "darwin", "linux"]) {
+      const options = runInNewContext(`(${optionsSource})`, { process: { platform } });
+      assert.equal(options.windowsHide, platform === "win32", `${platform}: ${command}`);
+      assert.ok(options.timeout > 0);
+    }
+  }
 });
 
 test("desktop API endpoint can be recovered after a webview reload", () => {

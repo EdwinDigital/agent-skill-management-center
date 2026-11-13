@@ -38,7 +38,8 @@ const githubOAuthScopes = process.env.GITHUB_OAUTH_SCOPES || "read:user user:ema
 app.use(express.json({ limit: "2mb" }));
 app.use((request, response, next) => {
   const origin = request.headers.origin;
-  if (origin && (/^tauri:\/\/localhost$/i.test(origin) || /^http:\/\/(localhost|127\.0\.0\.1):\d+$/i.test(origin))) {
+  // Windows WebView 使用 tauri.localhost，macOS 使用 tauri://localhost。
+  if (origin && (/^(?:tauri:\/\/localhost|https?:\/\/tauri\.localhost)$/i.test(origin) || /^http:\/\/(localhost|127\.0\.0\.1):\d+$/i.test(origin))) {
     response.setHeader("Access-Control-Allow-Origin", origin);
     response.setHeader("Vary", "Origin");
   }
@@ -200,7 +201,7 @@ app.post("/api/auth/github/logout", async (_request, response) => {
       if (status.login) {
         args.push("--user", status.login);
       }
-      await execFileAsync("gh", args, { timeout: 8000 });
+      await execFileAsync("gh", args, { timeout: 8000, windowsHide: process.platform === "win32" });
     }
     response.json({ ok: true, status: await getGitHubAuthStatus() });
   } catch (error) {
@@ -1687,7 +1688,7 @@ async function getGitHubAuthStatus({ checkCli = false } = {}) {
   }
 
   try {
-    const { stdout } = await execFileAsync("gh", ["auth", "status", "--json", "hosts"], { timeout: 6000 });
+    const { stdout } = await execFileAsync("gh", ["auth", "status", "--json", "hosts"], { timeout: 6000, windowsHide: process.platform === "win32" });
     const parsed = JSON.parse(stdout);
     const hosts = Object.entries(parsed.hosts || {}).flatMap(([hostname, value]) => {
       const accounts = Array.isArray(value) ? value : [value];

@@ -1,6 +1,6 @@
 {
   "name": "skill-logic-visualizer",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A local-first workbench for exploring, auditing, translating, and AI-evaluating Agent Skills.",
   "license": "MIT",
   "repository": {

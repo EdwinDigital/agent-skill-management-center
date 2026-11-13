@@ -31,6 +31,6 @@ If GitHub private vulnerability reporting is unavailable for the repository's cu
 - Agent SMC reads configured Skill roots and samples local files for requested analysis.
 - Requested AI evaluation and translation send Skill context to GitHub Copilot SDK.
 - Desktop OAuth tokens and analysis data are stored locally; protect the operating-system user account and application data directory.
-- macOS v1.0.0 is ad-hoc signed but not notarized; Windows v1.0.0 installers are unsigned. Verify Release checksums before installation.
+- macOS v1.0.1 is ad-hoc signed but not notarized; Windows v1.0.1 installers are unsigned. Verify Release checksums before installation.
 
 Reports about unsupported third-party Skills, GitHub Copilot availability, or operating-system warnings without a vulnerability should use [SUPPORT.md](SUPPORT.md).

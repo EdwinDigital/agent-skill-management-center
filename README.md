@@ -9,11 +9,11 @@
 <p align="center">
   <a href="README-CN.md">中文</a> ·
   <a href="docs/README.md">Documentation</a> ·
-  <a href="https://github.com/EdwinDigital/agent-skill-management-center/releases/tag/v1.0.0">Download v1.0.0</a>
+  <a href="https://github.com/EdwinDigital/agent-skill-management-center/releases/tag/v1.0.1">Download v1.0.1</a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/EdwinDigital/agent-skill-management-center/releases/tag/v1.0.0"><img src="https://img.shields.io/badge/release-v1.0.0-2563eb" alt="Release v1.0.0"></a>
+  <a href="https://github.com/EdwinDigital/agent-skill-management-center/releases/tag/v1.0.1"><img src="https://img.shields.io/badge/release-v1.0.1-2563eb" alt="Release v1.0.1"></a>
   <a href="https://github.com/EdwinDigital/agent-skill-management-center/actions/workflows/ci.yml"><img src="https://img.shields.io/badge/CI-macOS%20ARM64%20%7C%20Windows%20passing-16a34a" alt="CI passing on macOS ARM64 and Windows"></a>
   <a href="docs/desktop-release.md"><img src="https://img.shields.io/badge/platform-macOS%20ARM64%20%7C%20Windows%20x64%2FARM64-2563eb" alt="macOS ARM64, Windows x64 and Windows ARM64"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-16a34a" alt="MIT License"></a>
@@ -35,10 +35,10 @@ Agent SMC turns scattered local Skill folders into an auditable registry. It sho
 
 | Platform | Package |
 | --- | --- |
-| Apple silicon, macOS 12+ | [Agent-SMC-1.0.0-macos-arm64.dmg](https://github.com/EdwinDigital/agent-skill-management-center/releases/download/v1.0.0/Agent-SMC-1.0.0-macos-arm64.dmg) |
-| Intel/AMD Windows | [Agent-SMC-1.0.0-windows-x64-setup.exe](https://github.com/EdwinDigital/agent-skill-management-center/releases/download/v1.0.0/Agent-SMC-1.0.0-windows-x64-setup.exe) |
-| Windows on ARM | [Agent-SMC-1.0.0-windows-arm64-setup.exe](https://github.com/EdwinDigital/agent-skill-management-center/releases/download/v1.0.0/Agent-SMC-1.0.0-windows-arm64-setup.exe) |
-| Integrity | [SHA256SUMS.txt](https://github.com/EdwinDigital/agent-skill-management-center/releases/download/v1.0.0/SHA256SUMS.txt) |
+| Apple silicon, macOS 12+ | [Agent-SMC-1.0.1-macos-arm64.dmg](https://github.com/EdwinDigital/agent-skill-management-center/releases/download/v1.0.1/Agent-SMC-1.0.1-macos-arm64.dmg) |
+| Intel/AMD Windows | [Agent-SMC-1.0.1-windows-x64-setup.exe](https://github.com/EdwinDigital/agent-skill-management-center/releases/download/v1.0.1/Agent-SMC-1.0.1-windows-x64-setup.exe) |
+| Windows on ARM | [Agent-SMC-1.0.1-windows-arm64-setup.exe](https://github.com/EdwinDigital/agent-skill-management-center/releases/download/v1.0.1/Agent-SMC-1.0.1-windows-arm64-setup.exe) |
+| Integrity | [SHA256SUMS.txt](https://github.com/EdwinDigital/agent-skill-management-center/releases/download/v1.0.1/SHA256SUMS.txt) |
 
 The macOS package is ad-hoc signed but not notarized. Windows installers are unsigned and may trigger SmartScreen. Verify the checksum before approving an operating-system warning. See the [desktop release guide](docs/desktop-release.md).
 

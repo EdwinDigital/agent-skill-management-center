@@ -4,13 +4,13 @@
 
 ## Published Packages
 
-The current stable release is [v1.0.0](https://github.com/EdwinDigital/agent-skill-management-center/releases/tag/v1.0.0).
+The current stable release is [v1.0.1](https://github.com/EdwinDigital/agent-skill-management-center/releases/tag/v1.0.1).
 
 | Package | Target |
 | --- | --- |
-| `Agent-SMC-1.0.0-macos-arm64.dmg` | Apple silicon, macOS 12+. |
-| `Agent-SMC-1.0.0-windows-x64-setup.exe` | Intel/AMD Windows. |
-| `Agent-SMC-1.0.0-windows-arm64-setup.exe` | Snapdragon and Windows on ARM. |
+| `Agent-SMC-1.0.1-macos-arm64.dmg` | Apple silicon, macOS 12+. |
+| `Agent-SMC-1.0.1-windows-x64-setup.exe` | Intel/AMD Windows. |
+| `Agent-SMC-1.0.1-windows-arm64-setup.exe` | Snapdragon and Windows on ARM. |
 | `SHA256SUMS.txt` | SHA-256 hashes for the three installers. |
 
 Desktop packages include official Node.js 24.11.1 and target-native Copilot runtime files. End users do not install Node.

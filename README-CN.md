@@ -9,11 +9,11 @@
 <p align="center">
   <a href="README.md">English</a> ·
   <a href="docs/README.md">文档中心</a> ·
-  <a href="https://github.com/EdwinDigital/agent-skill-management-center/releases/tag/v1.0.0">下载 v1.0.0</a>
+  <a href="https://github.com/EdwinDigital/agent-skill-management-center/releases/tag/v1.0.1">下载 v1.0.1</a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/EdwinDigital/agent-skill-management-center/releases/tag/v1.0.0"><img src="https://img.shields.io/badge/release-v1.0.0-2563eb" alt="Release v1.0.0"></a>
+  <a href="https://github.com/EdwinDigital/agent-skill-management-center/releases/tag/v1.0.1"><img src="https://img.shields.io/badge/release-v1.0.1-2563eb" alt="Release v1.0.1"></a>
   <a href="https://github.com/EdwinDigital/agent-skill-management-center/actions/workflows/ci.yml"><img src="https://img.shields.io/badge/CI-macOS%20ARM64%20%7C%20Windows%20passing-16a34a" alt="macOS ARM64 与 Windows CI 通过"></a>
   <a href="docs/desktop-release-CN.md"><img src="https://img.shields.io/badge/platform-macOS%20ARM64%20%7C%20Windows%20x64%2FARM64-2563eb" alt="macOS ARM64、Windows x64 与 Windows ARM64"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-16a34a" alt="MIT License"></a>
@@ -35,10 +35,10 @@ Agent SMC 将散落在本机的 Skill 文件夹整理成可审计的注册表。
 
 | 平台 | 安装包 |
 | --- | --- |
-| Apple 芯片，macOS 12+ | [Agent-SMC-1.0.0-macos-arm64.dmg](https://github.com/EdwinDigital/agent-skill-management-center/releases/download/v1.0.0/Agent-SMC-1.0.0-macos-arm64.dmg) |
-| Intel/AMD Windows | [Agent-SMC-1.0.0-windows-x64-setup.exe](https://github.com/EdwinDigital/agent-skill-management-center/releases/download/v1.0.0/Agent-SMC-1.0.0-windows-x64-setup.exe) |
-| Windows on ARM | [Agent-SMC-1.0.0-windows-arm64-setup.exe](https://github.com/EdwinDigital/agent-skill-management-center/releases/download/v1.0.0/Agent-SMC-1.0.0-windows-arm64-setup.exe) |
-| 完整性校验 | [SHA256SUMS.txt](https://github.com/EdwinDigital/agent-skill-management-center/releases/download/v1.0.0/SHA256SUMS.txt) |
+| Apple 芯片，macOS 12+ | [Agent-SMC-1.0.1-macos-arm64.dmg](https://github.com/EdwinDigital/agent-skill-management-center/releases/download/v1.0.1/Agent-SMC-1.0.1-macos-arm64.dmg) |
+| Intel/AMD Windows | [Agent-SMC-1.0.1-windows-x64-setup.exe](https://github.com/EdwinDigital/agent-skill-management-center/releases/download/v1.0.1/Agent-SMC-1.0.1-windows-x64-setup.exe) |
+| Windows on ARM | [Agent-SMC-1.0.1-windows-arm64-setup.exe](https://github.com/EdwinDigital/agent-skill-management-center/releases/download/v1.0.1/Agent-SMC-1.0.1-windows-arm64-setup.exe) |
+| 完整性校验 | [SHA256SUMS.txt](https://github.com/EdwinDigital/agent-skill-management-center/releases/download/v1.0.1/SHA256SUMS.txt) |
 
 macOS 安装包使用 ad-hoc 签名但未公证；Windows 安装包未签名，可能触发 SmartScreen。放行系统提示前请先验证校验和。详见[桌面发布指南](docs/desktop-release-CN.md)。
 

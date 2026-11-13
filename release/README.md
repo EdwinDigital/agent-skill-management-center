@@ -16,12 +16,12 @@ src-tauri/target/<target-triple>/release/bundle/dmg/
 src-tauri/target/<target-triple>/release/bundle/nsis/
 ```
 
-The `v1.0.0` GitHub Release uses these names:
+The `v1.0.1` GitHub Release uses these names:
 
 ```text
-Agent-SMC-1.0.0-macos-arm64.dmg
-Agent-SMC-1.0.0-windows-x64-setup.exe
-Agent-SMC-1.0.0-windows-arm64-setup.exe
+Agent-SMC-1.0.1-macos-arm64.dmg
+Agent-SMC-1.0.1-windows-x64-setup.exe
+Agent-SMC-1.0.1-windows-arm64-setup.exe
 SHA256SUMS.txt
 ```
 

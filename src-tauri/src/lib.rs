@@ -127,7 +127,8 @@ fn start_sidecar(app: &tauri::App) -> Result<(String, String, Child), Box<dyn st
 
     let api_token = create_sidecar_token();
     let database_path = app_data_dir.join("analysis.sqlite");
-    let mut child = Command::new(&node_path)
+    let mut command = Command::new(&node_path);
+    command
         .arg("server.js")
         .current_dir(&sidecar_dir)
         .env("HOST", "127.0.0.1")
@@ -136,8 +137,18 @@ fn start_sidecar(app: &tauri::App) -> Result<(String, String, Child), Box<dyn st
         .env("AGENT_SMC_TOKEN", &api_token)
         .env("SKILL_ANALYSIS_DB", database_path)
         .stdout(Stdio::piped())
-        .stderr(Stdio::inherit())
-        .spawn()?;
+        .stderr(Stdio::inherit());
+
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+
+        // 主程序的 windows_subsystem 不会传给子进程，需单独禁止 Node 创建控制台。
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+
+    let mut child = command.spawn()?;
 
     let stdout = child
         .stdout

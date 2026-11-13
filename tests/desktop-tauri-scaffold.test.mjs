@@ -43,9 +43,9 @@ test("Tauri exposes native WebView zoom for desktop app scaling", () => {
 });
 
 test("desktop release version is synchronized across package and Tauri metadata", () => {
-  assert.equal(packageJson.version, "1.0.0");
+  assert.equal(packageJson.version, "1.0.1");
   assert.equal(tauriConfig.version, packageJson.version);
-  assert.match(cargoToml, /version = "1\.0\.0"/);
+  assert.match(cargoToml, /version = "1\.0\.1"/);
 });
 
 test("Tauri bundle declares application icons", () => {

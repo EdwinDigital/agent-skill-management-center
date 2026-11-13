@@ -9,9 +9,9 @@ const macConfig = readOptionalJson("../src-tauri/tauri.macos.conf.json");
 const windowsConfig = readOptionalJson("../src-tauri/tauri.windows.conf.json");
 
 test("release metadata and desktop CLI are deterministic", () => {
-  assert.equal(packageJson.version, "1.0.0");
-  assert.equal(tauriConfig.version, "1.0.0");
-  assert.match(cargoToml, /version = "1\.0\.0"/);
+  assert.equal(packageJson.version, "1.0.1");
+  assert.equal(tauriConfig.version, "1.0.1");
+  assert.match(cargoToml, /version = "1\.0\.1"/);
   assert.equal(packageJson.devDependencies["@tauri-apps/cli"], "2.11.4");
   assert.equal(packageJson.scripts.test, "node --test tests/*.test.mjs");
   assert.equal(packageJson.scripts["desktop:build"], "tauri build");

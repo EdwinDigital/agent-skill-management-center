@@ -4,13 +4,13 @@
 
 ## 已发布安装包
 
-当前稳定版本为 [v1.0.0](https://github.com/EdwinDigital/agent-skill-management-center/releases/tag/v1.0.0)。
+当前稳定版本为 [v1.0.1](https://github.com/EdwinDigital/agent-skill-management-center/releases/tag/v1.0.1)。
 
 | 安装包 | 目标平台 |
 | --- | --- |
-| `Agent-SMC-1.0.0-macos-arm64.dmg` | Apple 芯片，macOS 12+。 |
-| `Agent-SMC-1.0.0-windows-x64-setup.exe` | Intel/AMD Windows。 |
-| `Agent-SMC-1.0.0-windows-arm64-setup.exe` | Snapdragon 和 Windows on ARM。 |
+| `Agent-SMC-1.0.1-macos-arm64.dmg` | Apple 芯片，macOS 12+。 |
+| `Agent-SMC-1.0.1-windows-x64-setup.exe` | Intel/AMD Windows。 |
+| `Agent-SMC-1.0.1-windows-arm64-setup.exe` | Snapdragon 和 Windows on ARM。 |
 | `SHA256SUMS.txt` | 三个安装包的 SHA-256。 |
 
 桌面安装包内置官方 Node.js 24.11.1 和目标平台原生 Copilot runtime，终端用户无需安装 Node。

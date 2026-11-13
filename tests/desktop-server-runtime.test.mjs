@@ -13,6 +13,10 @@ const projectRoot = fileURLToPath(new URL("..", import.meta.url));
 
 test("desktop sidecar reports its random port and protects API routes with a launch token", { timeout: 20_000 }, async (t) => {
   const temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "agent-smc-sidecar-test-"));
+  const skillRoot = path.join(temporaryDirectory, ".agents", "skills");
+  const skillDirectory = path.join(skillRoot, "desktop-cors-regression");
+  fs.mkdirSync(skillDirectory, { recursive: true });
+  fs.writeFileSync(path.join(skillDirectory, "SKILL.md"), "---\nname: desktop-cors-regression\ndescription: Verify desktop scanning.\n---\n# Desktop CORS regression\n");
   const child = spawn(process.execPath, ["server.js"], {
     cwd: projectRoot,
     env: {
@@ -21,6 +25,9 @@ test("desktop sidecar reports its random port and protects API routes with a lau
       PORT: "0",
       AGENT_SMC_SIDECAR: "1",
       AGENT_SMC_TOKEN: "test-token",
+      HOME: temporaryDirectory,
+      USERPROFILE: temporaryDirectory,
+      SKILL_ROOT: skillRoot,
       SKILL_ANALYSIS_DB: path.join(temporaryDirectory, "analysis.sqlite")
     },
     stdio: ["ignore", "pipe", "pipe"]
@@ -39,10 +46,90 @@ test("desktop sidecar reports its random port and protects API routes with a lau
   const ready = await waitForReady(child, () => stderr);
   const baseUrl = `http://${ready.host}:${ready.port}`;
 
-  assert.equal((await fetch(`${baseUrl}/api/config`)).status, 401);
-  assert.equal((await fetch(`${baseUrl}/api/config`, {
-    headers: { "X-Agent-SMC-Token": "test-token" }
-  })).status, 200);
+  await t.test("desktop and development origins pass preflight and can initialize the app", async () => {
+    for (const origin of [
+      "http://tauri.localhost",
+      "tauri://localhost",
+      "https://tauri.localhost",
+      "http://localhost:5173",
+      "http://127.0.0.1:5173"
+    ]) {
+      const preflight = await fetch(`${baseUrl}/api/skill-roots/scan`, {
+        method: "OPTIONS",
+        headers: {
+          Origin: origin,
+          "Access-Control-Request-Method": "POST",
+          "Access-Control-Request-Headers": "content-type,x-agent-smc-token"
+        }
+      });
+      assert.equal(preflight.status, 204, origin);
+      assert.equal(preflight.headers.get("access-control-allow-origin"), origin, origin);
+      assert.match(preflight.headers.get("vary"), /\bOrigin\b/i);
+      assert.match(preflight.headers.get("access-control-allow-methods"), /\bPOST\b/);
+      assert.match(preflight.headers.get("access-control-allow-headers"), /\bcontent-type\b/i);
+      assert.match(preflight.headers.get("access-control-allow-headers"), /\bx-agent-smc-token\b/i);
+
+      const config = await fetch(`${baseUrl}/api/config`, {
+        headers: { Origin: origin, "X-Agent-SMC-Token": "test-token" }
+      });
+      assert.equal(config.status, 200, origin);
+      assert.equal(config.headers.get("access-control-allow-origin"), origin, origin);
+      assert.equal((await config.json()).defaultSkillRoot, skillRoot);
+    }
+  });
+
+  await t.test("untrusted origins do not receive CORS permission", async () => {
+    for (const origin of [
+      "https://example.com",
+      "http://tauri.localhost.evil.example",
+      "http://evil.tauri.localhost",
+      "http://tauri.localhost:5173",
+      "tauri://localhost.evil.example",
+      "http://localhost.evil.example:5173",
+      "null"
+    ]) {
+      const response = await fetch(`${baseUrl}/api/skill-roots/scan`, {
+        method: "OPTIONS",
+        headers: { Origin: origin, "Access-Control-Request-Method": "POST" }
+      });
+      assert.equal(response.headers.get("access-control-allow-origin"), null, origin);
+    }
+  });
+
+  await t.test("trusted desktop origins still require the launch token", async () => {
+    assert.equal((await fetch(`${baseUrl}/api/config`)).status, 401);
+    for (const origin of ["http://tauri.localhost", "tauri://localhost"]) {
+      for (const token of [undefined, "wrong-token"]) {
+        const headers = { Origin: origin };
+        if (token) headers["X-Agent-SMC-Token"] = token;
+        const response = await fetch(`${baseUrl}/api/config`, { headers });
+        assert.equal(response.status, 401);
+        assert.equal(response.headers.get("access-control-allow-origin"), origin);
+      }
+    }
+  });
+
+  for (const [platform, origin] of [["Windows", "http://tauri.localhost"], ["macOS", "tauri://localhost"]]) {
+    await t.test(`${platform} desktop can scan and load the discovered skills`, async () => {
+      const headers = { Origin: origin, "X-Agent-SMC-Token": "test-token", "Content-Type": "application/json" };
+      const scan = await fetch(`${baseUrl}/api/skill-roots/scan`, { method: "POST", headers, body: "{}" });
+      assert.equal(scan.status, 200);
+      assert.equal(scan.headers.get("access-control-allow-origin"), origin);
+      const result = await scan.json();
+      assert.ok(result.skillIndex.indexed >= 1);
+      assert.ok(result.roots.some((root) => root.expandedPath === skillRoot));
+
+      const skills = await fetch(`${baseUrl}/api/skills?root=${encodeURIComponent(skillRoot)}`, { headers });
+      assert.equal(skills.status, 200);
+      assert.equal(skills.headers.get("access-control-allow-origin"), origin);
+      assert.ok((await skills.json()).skills.some((skill) => skill.name === "desktop-cors-regression"));
+
+      const detail = await fetch(`${baseUrl}/api/skills/desktop-cors-regression?root=${encodeURIComponent(skillRoot)}`, { headers });
+      assert.equal(detail.status, 200);
+      assert.equal(detail.headers.get("access-control-allow-origin"), origin);
+      assert.equal((await detail.json()).skill.name, "desktop-cors-regression");
+    });
+  }
 });
 
 test("stored GitHub OAuth without Copilot scope is authenticated but not ready", { timeout: 20_000 }, async (t) => {

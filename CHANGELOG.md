@@ -4,6 +4,14 @@ All notable changes to Agent Skill Management Center are documented here. The fo
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-11-13
+
+### Fixed
+
+- Allowed the Windows Tauri WebView origin to access the local API, fixing startup and global scan failures.
+- Prevented the Windows Node sidecar and background GitHub CLI commands from opening console windows.
+- Kept Windows process flags platform-specific and added macOS-origin API regression coverage.
+
 ### Documentation
 
 - Reorganized the project homepage and detailed bilingual documentation.
@@ -26,5 +34,6 @@ All notable changes to Agent Skill Management Center are documented here. The fo
 - Bound the desktop sidecar to localhost and protected API routes with a per-launch UUID token.
 - Added SHA-256 checksums for every published installer.
 
-[Unreleased]: https://github.com/EdwinDigital/agent-skill-management-center/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/EdwinDigital/agent-skill-management-center/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/EdwinDigital/agent-skill-management-center/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/EdwinDigital/agent-skill-management-center/releases/tag/v1.0.0
