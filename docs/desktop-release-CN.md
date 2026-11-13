@@ -42,11 +42,21 @@
 
 任一构建失败都会让 Release 保持草稿。构建 job 不直接向公开 Release 上传文件。
 
+### 重建尚未发布的 Tag
+
+若打 Tag 后托管 runner 配置发生变化，可从 `main` 调用修正后的工作流，保持原 Tag 和源码 commit 不变：
+
+```bash
+gh workflow run desktop-release.yml --ref main -f release_tag=v1.0.1 -f publish=true
+```
+
+三个安装包均从同一个固定 Tag commit 重新构建。只有全部构建、签名检查、资产检查和草稿目标校验通过后才发布。省略 `publish=true` 则保留草稿，已有公开 Release 不允许覆盖。
+
 ## CI
 
 Pull Request 和 `main` 推送会触发 `.github/workflows/ci.yml`：
 
-- macOS ARM64：Node 测试、源码检查、前端构建和 Rust/Tauri check。
+- macOS ARM64（`macos-15`）：Node 测试、源码检查、前端构建和 Rust/Tauri check。应用配置的最低 macOS 版本仍为 12.0。
 - Windows x64：Node 测试（包括 Windows 路径和 sidecar 运行时行为）及源码检查。
 
 CI 不构建或测试 Linux 桌面目标。

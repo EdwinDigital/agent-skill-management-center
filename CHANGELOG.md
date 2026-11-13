@@ -4,6 +4,11 @@ All notable changes to Agent Skill Management Center are documented here. The fo
 
 ## [Unreleased]
 
+### Build
+
+- Migrated macOS CI and release jobs to the supported macOS 15 ARM64 runner.
+- Added manual rebuilding of an existing unpublished tag without moving its source commit, with opt-in publication after all platform checks pass.
+
 ## [1.0.1] - 2026-11-13
 
 ### Fixed

@@ -42,11 +42,21 @@ Desktop packages include official Node.js 24.11.1 and target-native Copilot runt
 
 Any build failure leaves the Release as a draft. Build jobs never upload directly to a public Release.
 
+### Rebuild An Unpublished Tag
+
+If the hosted runner configuration changes after tagging, dispatch the current workflow from `main` while keeping the original tag and source commit unchanged:
+
+```bash
+gh workflow run desktop-release.yml --ref main -f release_tag=v1.0.1 -f publish=true
+```
+
+All three installers are rebuilt from the same immutable tag commit. Publishing still requires every build, signature check, asset check, and draft-target validation to pass. Omit `publish=true` to keep the result as a draft. Existing public releases cannot be overwritten.
+
 ## CI
 
 `.github/workflows/ci.yml` runs on pull requests and pushes to `main`:
 
-- macOS ARM64: Node tests, source checks, frontend build, and Rust/Tauri check.
+- macOS ARM64 on `macos-15`: Node tests, source checks, frontend build, and Rust/Tauri check. The app's configured minimum macOS version remains 12.0.
 - Windows x64: Node tests, including Windows path and sidecar runtime behavior, plus source checks.
 
 CI does not build or test a Linux desktop target.

@@ -12,7 +12,8 @@ test("CI runs read-only quality gates on main, pull requests, macOS, and Windows
   assert.match(ci, /push:[\s\S]*branches:[\s\S]*main/);
   assert.match(ci, /permissions:[\s\S]*contents: read/);
   assert.match(ci, /cancel-in-progress: true/);
-  assert.match(ci, /macos-14/);
+  assert.match(ci, /macos-15/);
+  assert.doesNotMatch(ci, /macos-14/);
   assert.match(ci, /windows-latest/);
   assert.doesNotMatch(ci, /ubuntu-latest|Tauri Linux prerequisites|webkit2gtk/);
   assert.match(ci, /node-version: "24\.11\.1"/);
@@ -27,6 +28,8 @@ test("desktop release builds all native targets before publishing", () => {
   assert.match(release, /workflow_dispatch:/);
   assert.match(release, /permissions:[\s\S]*contents: write/);
   assert.match(release, /macos-arm64/);
+  assert.match(release, /os: macos-15/);
+  assert.doesNotMatch(release, /macos-14/);
   assert.match(release, /windows-x64/);
   assert.match(release, /windows-arm64/);
   assert.match(release, /windows-11-arm/);
@@ -62,7 +65,7 @@ test("workflow YAML parses into the expected job and permission structure", () =
 
   assert.deepEqual(ciConfig.on.push.branches, ["main"]);
   assert.equal(ciConfig.permissions.contents, "read");
-  assert.equal(ciConfig.jobs.quality["runs-on"], "macos-14");
+  assert.equal(ciConfig.jobs.quality["runs-on"], "macos-15");
   assert.equal(ciConfig.jobs["windows-paths"]["runs-on"], "windows-latest");
   assert.equal(releaseConfig.permissions.contents, "read");
   assert.equal(releaseConfig.jobs.prepare.permissions.contents, "write");
@@ -70,6 +73,31 @@ test("workflow YAML parses into the expected job and permission structure", () =
   assert.deepEqual(releaseConfig.jobs.publish.needs, ["prepare", "build"]);
   assert.equal(releaseConfig.jobs.build.strategy["fail-fast"], false);
   assert.equal(releaseConfig.jobs.build.strategy.matrix.include.length, 3);
+});
+
+test("manual release rebuilds pin the original tag commit and publish only when requested", () => {
+  assert.ok(yaml, "the yaml parser must be installed for structured workflow validation");
+  const config = yaml.parse(release);
+  const inputs = config.on.workflow_dispatch.inputs;
+  assert.equal(inputs.release_tag.required, true);
+  assert.equal(inputs.release_tag.type, "string");
+  assert.equal(inputs.publish.type, "boolean");
+  assert.equal(inputs.publish.default, false);
+  assert.equal(config.concurrency["cancel-in-progress"], false);
+  assert.match(config.concurrency.group, /format\('refs\/tags\/\{0\}', inputs\.release_tag\)/);
+
+  const prepareCheckout = config.jobs.prepare.steps.find((step) => step.uses === "actions/checkout@v4");
+  assert.match(prepareCheckout.with.ref, /format\('refs\/tags\/\{0\}', inputs\.release_tag\)/);
+  for (const job of [config.jobs.build, config.jobs.publish]) {
+    const checkout = job.steps.find((step) => step.uses === "actions/checkout@v4");
+    assert.equal(checkout.with.ref, "${{ needs.prepare.outputs.commit }}");
+  }
+  const validate = config.jobs.prepare.steps.find((step) => step.id === "meta");
+  assert.equal(validate.env.RELEASE_TAG, "${{ inputs.release_tag || github.ref_name }}");
+  assert.match(validate.run, /git rev-parse --verify "refs\/tags\/\$\{tag\}\^\{commit\}"/);
+  assert.match(validate.run, /Release source does not match tag/);
+  const publish = config.jobs.publish.steps.find((step) => step.name === "Publish release");
+  assert.equal(publish.if, "github.event_name == 'push' || inputs.publish");
 });
 
 function readOptionalWorkflow(fileName) {
