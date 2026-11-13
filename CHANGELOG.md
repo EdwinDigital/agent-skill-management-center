@@ -6,6 +6,8 @@ All notable changes to Agent Skill Management Center are documented here. The fo
 
 ### Fixed
 
+- Explicitly stop desktop sidecars on exit and release them when the parent pipe disconnects, including startup failures and abnormal parent termination.
+- Stop only background processes inside the selected Windows installation before installing or uninstalling, preventing locked bundled Node files without affecting unrelated Node services.
 - Added the Windows native folder picker for custom Skill roots, preserving Unicode paths and keeping macOS AppleScript selection.
 - Treat folder-picker cancellation as a normal result without displaying an error or modifying saved roots.
 - Added direct path entry so directory management remains available when a system picker is blocked or unavailable, with concise timeout messages.

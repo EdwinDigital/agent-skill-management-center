@@ -65,6 +65,12 @@ PORT=5173 npm stop
 - Windows: approve SmartScreen only after confirming source and checksum.
 - Check that antivirus software did not quarantine embedded Node or native runtime files.
 
+## Windows Installer Cannot Write node.exe
+
+If `Error opening file for writing` points to `sidecar-node\runtime\node.exe` inside the installation directory, a background service left by an older version may still hold the file open. Do not select Ignore. Close Agent SMC, stop only background processes whose executable paths belong to that installation, then retry or rerun the installer. Do not delete the database or terminate all system-wide `node.exe` processes.
+
+The fixed desktop app explicitly stops its sidecar on exit and uses a parent pipe to handle abnormal parent termination. Before replacing or uninstalling files, the Windows installer also stops remaining services inside the selected installation. It aborts rather than skipping files if process paths cannot be verified or the runtime remains locked. Installer hooks are Windows-only, and the application version remains 1.0.1.
+
 ## Native Folder Picker
 
 Add path opens an in-app form where you can paste a local Skill root directly. Save validates the directory and its SKILL.md files before changing the root list. System folder selection is optional: Windows uses the built-in Windows PowerShell STA host and Windows Forms; macOS keeps using `osascript`. No additional application dependency is required. Cancelling leaves the selected root unchanged and does not display an error. If a system dialog is unavailable or times out, enter the path manually rather than changing Copilot authentication.

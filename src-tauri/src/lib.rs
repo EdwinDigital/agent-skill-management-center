@@ -5,7 +5,7 @@ use std::{
     time::Duration,
 };
 
-use tauri::{Manager, WebviewWindow, WindowEvent};
+use tauri::{Manager, RunEvent, WebviewWindow, WindowEvent};
 use uuid::Uuid;
 
 const APP_WINDOW_TITLE: &str = "Agent Skills Management Center-SMC";
@@ -22,19 +22,29 @@ struct SidecarProcess(Mutex<Option<Child>>);
 
 struct DesktopApiState(DesktopApiEndpoint);
 
-impl Drop for SidecarProcess {
-    fn drop(&mut self) {
-        if let Ok(mut child) = self.0.lock() {
-            if let Some(mut process) = child.take() {
-                let _ = process.kill();
-                let _ = process.wait();
+impl SidecarProcess {
+    fn stop(&self) {
+        let mut child = self.0.lock().unwrap_or_else(|error| error.into_inner());
+        if let Some(mut process) = child.take() {
+            if !matches!(process.try_wait(), Ok(Some(_))) {
+                if let Err(error) = process.kill() {
+                    eprintln!("failed to stop Agent SMC sidecar: {error}");
+                    return;
+                }
             }
+            let _ = process.wait();
         }
     }
 }
 
+impl Drop for SidecarProcess {
+    fn drop(&mut self) {
+        self.stop();
+    }
+}
+
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             set_app_zoom,
             get_desktop_api_endpoint
@@ -44,25 +54,38 @@ pub fn run() {
                 return Ok(());
             }
 
-            let (api_base_url, api_token, child) = start_sidecar(app)?;
-            app.manage(SidecarProcess(Mutex::new(Some(child))));
-            app.manage(DesktopApiState(DesktopApiEndpoint {
-                api_base_url: api_base_url.clone(),
-                api_token: api_token.clone(),
-            }));
+            let (api_base_url, api_token, sidecar) = start_sidecar(app)?;
             if let Some(window) = app.get_webview_window("main") {
                 apply_development_window_title(&window)?;
                 inject_api_endpoint(&window, &api_base_url, &api_token)?;
             }
+            app.manage(sidecar);
+            app.manage(DesktopApiState(DesktopApiEndpoint {
+                api_base_url,
+                api_token,
+            }));
             Ok(())
         })
         .on_window_event(|window, event| {
             if matches!(event, WindowEvent::CloseRequested { .. }) {
+                stop_sidecar(window.app_handle());
                 window.app_handle().exit(0);
             }
         })
-        .run(tauri::generate_context!())
+        .build(tauri::generate_context!())
         .expect("error while running Agent SMC");
+    app.run(|app_handle, event| {
+        // Tauri 直接退出进程，不会保证执行托管状态的 Drop。
+        if matches!(event, RunEvent::Exit) {
+            stop_sidecar(app_handle);
+        }
+    });
+}
+
+fn stop_sidecar(app: &tauri::AppHandle) {
+    if let Some(sidecar) = app.try_state::<SidecarProcess>() {
+        sidecar.stop();
+    }
 }
 
 #[tauri::command]
@@ -119,7 +142,7 @@ fn show_dmg_installation_warning() {
     }
 }
 
-fn start_sidecar(app: &tauri::App) -> Result<(String, String, Child), Box<dyn std::error::Error>> {
+fn start_sidecar(app: &tauri::App) -> Result<(String, String, SidecarProcess), Box<dyn std::error::Error>> {
     let sidecar_dir = resolve_sidecar_dir(app)?;
     let node_path = bundled_node_path(&sidecar_dir);
     let app_data_dir = app.path().app_data_dir()?;
@@ -134,8 +157,10 @@ fn start_sidecar(app: &tauri::App) -> Result<(String, String, Child), Box<dyn st
         .env("HOST", "127.0.0.1")
         .env("PORT", "0")
         .env("AGENT_SMC_SIDECAR", "1")
+        .env("AGENT_SMC_PARENT_PIPE", "1")
         .env("AGENT_SMC_TOKEN", &api_token)
         .env("SKILL_ANALYSIS_DB", database_path)
+        .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit());
 
@@ -150,10 +175,9 @@ fn start_sidecar(app: &tauri::App) -> Result<(String, String, Child), Box<dyn st
 
     let mut child = command.spawn()?;
 
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or("sidecar stdout was not captured")?;
+    let stdout = child.stdout.take();
+    let sidecar = SidecarProcess(Mutex::new(Some(child)));
+    let stdout = stdout.ok_or("sidecar stdout was not captured")?;
     let (ready_sender, ready_receiver) = mpsc::channel::<String>();
     std::thread::spawn(move || {
         let reader = BufReader::new(stdout);
@@ -174,7 +198,7 @@ fn start_sidecar(app: &tauri::App) -> Result<(String, String, Child), Box<dyn st
     let port = ready["port"]
         .as_u64()
         .ok_or("sidecar did not report a port")?;
-    Ok((format!("http://{host}:{port}"), api_token, child))
+    Ok((format!("http://{host}:{port}"), api_token, sidecar))
 }
 
 fn resolve_sidecar_dir(app: &tauri::App) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
@@ -214,4 +238,67 @@ fn inject_api_endpoint(
 
 fn create_sidecar_token() -> String {
     format!("agent-smc-{}", Uuid::new_v4().simple())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::{io::Read, process::ChildStdout};
+
+    fn spawn_fixture() -> (SidecarProcess, ChildStdout) {
+        let mut child = Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "tests::sidecar_child_fixture", "--ignored"])
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+        let stdout = child.stdout.take().unwrap();
+        (SidecarProcess(Mutex::new(Some(child))), stdout)
+    }
+
+    fn assert_child_stopped(mut stdout: ChildStdout) {
+        let (sender, receiver) = mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = stdout.read_to_end(&mut Vec::new());
+            let _ = sender.send(());
+        });
+        receiver.recv_timeout(Duration::from_secs(5)).expect("sidecar child still running");
+    }
+
+    #[test]
+    #[ignore]
+    fn sidecar_child_fixture() {
+        loop {
+            std::thread::sleep(Duration::from_secs(60));
+        }
+    }
+
+    #[test]
+    fn stop_reaps_the_child_and_is_idempotent() {
+        let (sidecar, stdout) = spawn_fixture();
+        sidecar.stop();
+        assert!(sidecar.0.lock().unwrap().is_none());
+        sidecar.stop();
+        assert_child_stopped(stdout);
+    }
+
+    #[test]
+    fn stop_recovers_a_poisoned_state_lock() {
+        let (sidecar, stdout) = spawn_fixture();
+        let _ = std::panic::catch_unwind(|| {
+            let _guard = sidecar.0.lock().unwrap();
+            panic!("poison the state lock");
+        });
+        sidecar.stop();
+        assert!(sidecar.0.lock().unwrap_err().into_inner().is_none());
+        assert_child_stopped(stdout);
+    }
+
+    #[test]
+    fn dropped_startup_guard_stops_the_child() {
+        let (sidecar, stdout) = spawn_fixture();
+        drop(sidecar);
+        assert_child_stopped(stdout);
+    }
 }

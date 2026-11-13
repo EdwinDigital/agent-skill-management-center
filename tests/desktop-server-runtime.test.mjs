@@ -222,6 +222,46 @@ test("stored GitHub OAuth without Copilot scope is authenticated but not ready",
   assert.equal(status.authRequired, true);
 });
 
+test("desktop sidecar exits and releases its database when the parent pipe closes", { timeout: 20_000 }, async (t) => {
+  const temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "agent-smc-parent-pipe-test-"));
+  const databasePath = path.join(temporaryDirectory, "analysis.sqlite");
+  const child = spawn(process.execPath, ["server.js"], {
+    cwd: projectRoot,
+    env: {
+      ...process.env,
+      HOST: "127.0.0.1",
+      PORT: "0",
+      AGENT_SMC_SIDECAR: "1",
+      AGENT_SMC_PARENT_PIPE: "1",
+      AGENT_SMC_TOKEN: "test-parent-token",
+      SKILL_ANALYSIS_DB: databasePath
+    },
+    windowsHide: true,
+    stdio: ["pipe", "pipe", "pipe"]
+  });
+  let stderr = "";
+  child.stderr.setEncoding("utf8");
+  child.stderr.on("data", (chunk) => { stderr += chunk; });
+  t.after(async () => {
+    await stopChild(child);
+    const resolved = fs.realpathSync(temporaryDirectory);
+    assert.ok(resolved.startsWith(fs.realpathSync(os.tmpdir()) + path.sep));
+    fs.rmSync(resolved, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  });
+
+  const ready = await waitForReady(child, () => stderr);
+  const response = await fetch(`http://${ready.host}:${ready.port}/api/config`, {
+    headers: { "X-Agent-SMC-Token": "test-parent-token" }
+  });
+  assert.equal(response.status, 200);
+  const exited = once(child, "exit");
+  child.stdin.end();
+  assert.deepEqual(await exited, [0, null]);
+  const database = new DatabaseSync(databasePath);
+  assert.equal(database.prepare("PRAGMA integrity_check").get().integrity_check, "ok");
+  database.close();
+});
+
 function waitForReady(child, readStderr) {
   return new Promise((resolve, reject) => {
     const lines = readline.createInterface({ input: child.stdout });

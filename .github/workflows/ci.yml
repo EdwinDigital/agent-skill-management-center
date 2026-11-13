@@ -45,6 +45,7 @@ jobs:
           rustup default stable
           rustup target add aarch64-apple-darwin
           cargo check --manifest-path src-tauri/Cargo.toml --target aarch64-apple-darwin
+          cargo test --manifest-path src-tauri/Cargo.toml --target aarch64-apple-darwin --lib
 
   windows-paths:
     name: Windows path and sidecar tests

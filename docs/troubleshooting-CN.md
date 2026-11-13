@@ -65,6 +65,12 @@ PORT=5173 npm stop
 - Windows：只有确认来源和校验和后才放行 SmartScreen。
 - 检查杀毒软件是否隔离了内置 Node 或原生 runtime 文件。
 
+## Windows 安装时无法写入 node.exe
+
+若出现 `Error opening file for writing`，且路径指向安装目录下的 `sidecar-node\runtime\node.exe`，通常是旧版本遗留的后台服务仍在占用文件。不要选择“忽略”；关闭 Agent SMC 后，仅结束可执行文件路径属于该安装目录的后台进程，再点“重试”或重新运行安装包。无需删除数据库，也不要批量结束系统中所有 `node.exe`。
+
+修复后的桌面应用会在退出时显式清理后台服务，并通过父进程管道处理主程序异常退出。Windows 安装器在覆盖或卸载文件前还会清理当前安装目录内的残留服务；无法确认进程路径或无法释放文件时会中止，而不是跳过文件。此防护只配置在 Windows 安装器中，应用版本号仍为 1.0.1。
+
 ## 原生目录选择器
 
 “添加路径”先打开应用内表单，可直接粘贴本机 Skill 根目录。保存时会校验目录及其中的 SKILL.md，验证通过后才更新目录列表。系统选择器为可选方式：Windows 使用系统自带的 Windows PowerShell STA 宿主和 Windows Forms，macOS 继续使用 `osascript`，不额外安装应用依赖。取消选择会保留当前目录且不报错。若系统弹窗不可用或超时，直接输入目录路径即可，无需修改 Copilot 认证。

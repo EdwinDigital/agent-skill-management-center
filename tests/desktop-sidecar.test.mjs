@@ -26,6 +26,22 @@ test("Rust app starts the sidecar and injects the API endpoint into the webview"
   assert.match(tauriSource, /AGENT_SMC_READY/);
 });
 
+test("desktop shutdown explicitly stops the sidecar instead of depending on Drop", () => {
+  assert.match(tauriSource, /impl SidecarProcess[\s\S]*fn stop\(&self\)/);
+  assert.match(tauriSource, /WindowEvent::CloseRequested[\s\S]*stop_sidecar\(window\.app_handle\(\)\);[\s\S]*\.exit\(0\)/);
+  assert.match(tauriSource, /\.build\(tauri::generate_context!\(\)\)/);
+  assert.match(tauriSource, /app\.run\([\s\S]*RunEvent::Exit[\s\S]*stop_sidecar\(app_handle\)/);
+  assert.match(tauriSource, /try_state::<SidecarProcess>/);
+  assert.match(tauriSource, /let sidecar = SidecarProcess\(Mutex::new\(Some\(child\)\)\);[\s\S]*recv_timeout/);
+});
+
+test("desktop sidecars keep a parent pipe while standalone servers are unchanged", () => {
+  assert.match(tauriSource, /\.env\("AGENT_SMC_PARENT_PIPE", "1"\)/);
+  assert.match(tauriSource, /\.stdin\(Stdio::piped\(\)\)/);
+  assert.match(serverSource, /AGENT_SMC_SIDECAR === "1" && process\.env\.AGENT_SMC_PARENT_PIPE === "1"/);
+  assert.match(serverSource, /process\.stdin\.once\("end",[\s\S]*database\.close\(\);[\s\S]*process\.exit\(0\)/);
+});
+
 test("Windows sidecar disables console creation before spawning while preserving readiness output", () => {
   const startSidecarSource = tauriSource.slice(tauriSource.indexOf("fn start_sidecar("), tauriSource.indexOf("fn resolve_sidecar_dir("));
   assert.match(startSidecarSource, /let mut command = Command::new\(&node_path\);/);

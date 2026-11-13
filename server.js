@@ -2647,6 +2647,16 @@ process.on("uncaughtException", (error) => {
 
 const server = host ? app.listen(port, host, onServerListening) : app.listen(port, onServerListening);
 
+// 桌面主进程崩溃或被强制结束时，管道 EOF 仍能释放内置 Node 的文件占用。
+if (process.env.AGENT_SMC_SIDECAR === "1" && process.env.AGENT_SMC_PARENT_PIPE === "1") {
+  process.stdin.once("end", () => {
+    server.close();
+    database.close();
+    process.exit(0);
+  });
+  process.stdin.resume();
+}
+
 function onServerListening() {
   const address = server.address();
   const actualPort = typeof address === "object" && address ? address.port : port;
